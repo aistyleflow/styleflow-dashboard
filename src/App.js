@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { supabase } from './supabase.js'
 import Login from './Login.js'
-import Products from './products.js'  // ✅ import Products
+import Products from './Products.js'
 
 function App() {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [owner, setOwner] = useState(null)
-  const [activeTab, setActiveTab] = useState('orders') // ✅ tab state
+  const [activeTab, setActiveTab] = useState('orders')
 
   function handleLoginSuccess(ownerData) {
     console.log("✅ Login success — store_id:", ownerData.id)
@@ -33,9 +33,9 @@ function App() {
         .from('orders')
         .select('*')
         .eq('store_id', Number(storeId))
+        .order('id', { ascending: true }) // ✅ order 1,2,3... first to last
 
       console.log("ORDERS RETURNED:", data)
-      console.log("ERROR:", error)
 
       if (error) {
         setError(error.message)
@@ -79,7 +79,7 @@ function App() {
   return (
     <div style={styles.container}>
 
-      {/* ✅ Header */}
+      {/* Header */}
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>🛍️ StyleFlow Dashboard</h1>
@@ -103,7 +103,7 @@ function App() {
         </div>
       </div>
 
-      {/* ✅ Tab switcher */}
+      {/* Tab switcher */}
       <div style={styles.tabBar}>
         <button
           style={{
@@ -127,7 +127,7 @@ function App() {
         </button>
       </div>
 
-      {/* ✅ Orders Tab */}
+      {/* Orders Tab */}
       {activeTab === 'orders' && (
         <>
           <div style={styles.statsBar}>
@@ -176,9 +176,7 @@ function App() {
 
                   <div style={styles.orderHeader}>
                     <div>
-                      <p style={styles.orderId}>
-                        🆔 {String(order.id)} (store: {order.store_id})
-                      </p>
+                      <p style={styles.orderId}>🆔 {String(order.id)}</p>
                       <p style={styles.orderDate}>
                         🕐 {new Date(order.created_at).toLocaleString()}
                       </p>
@@ -225,7 +223,7 @@ function App() {
         </>
       )}
 
-      {/* ✅ Products Tab */}
+      {/* Products Tab */}
       {activeTab === 'products' && (
         <Products owner={owner} />
       )}
