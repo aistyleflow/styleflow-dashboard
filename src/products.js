@@ -19,9 +19,10 @@ function Products({ owner }) {
 
   useEffect(() => {
     fetchProducts()
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ✅ Fetch products for this store only
   async function fetchProducts() {
     try {
       setLoading(true)
@@ -34,12 +35,10 @@ function Products({ owner }) {
         .order('id', { ascending: false })
 
       if (error) {
-        console.error('❌ Error fetching products:', error.message)
         setError(error.message)
         return
       }
 
-      console.log('✅ Products fetched:', data.length)
       setProducts(data)
 
     } catch (err) {
@@ -49,12 +48,10 @@ function Products({ owner }) {
     }
   }
 
-  // ✅ Handle form input change
   function handleChange(e) {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
-  // ✅ Open add form
   function handleAddClick() {
     setEditProduct(null)
     setForm({
@@ -69,22 +66,20 @@ function Products({ owner }) {
     setShowForm(true)
   }
 
-  // ✅ Open edit form
   function handleEditClick(product) {
     setEditProduct(product)
     setForm({
       product_name: product.product_name,
       price: product.price,
       stock: product.stock,
-      size: product.size,
-      color: product.color,
-      category: product.category,
+      size: product.size || '',
+      color: product.color || '',
+      category: product.category || '',
       image_url: product.image_url || ''
     })
     setShowForm(true)
   }
 
-  // ✅ Save product (add or edit)
   async function handleSave() {
     try {
       if (!form.product_name || !form.price || !form.stock) {
@@ -100,18 +95,16 @@ function Products({ owner }) {
         color: form.color,
         category: form.category,
         image_url: form.image_url,
-        store_id: owner.id  // ✅ always link to current store
+        store_id: owner.id
       }
 
       if (editProduct) {
-        // ✅ Update existing product
         const { error } = await supabase
           .from('products')
           .update(productData)
           .eq('id', editProduct.id)
 
         if (error) {
-          console.error('❌ Update error:', error.message)
           alert('Could not update product. Try again!')
           return
         }
@@ -119,13 +112,11 @@ function Products({ owner }) {
         console.log('✅ Product updated:', form.product_name)
 
       } else {
-        // ✅ Insert new product
         const { error } = await supabase
           .from('products')
           .insert(productData)
 
         if (error) {
-          console.error('❌ Insert error:', error.message)
           alert('Could not add product. Try again!')
           return
         }
@@ -141,7 +132,6 @@ function Products({ owner }) {
     }
   }
 
-  // ✅ Delete product
   async function handleDelete(productId, productName) {
     if (!window.confirm(`Delete "${productName}"?`)) return
 
@@ -151,13 +141,18 @@ function Products({ owner }) {
       .eq('id', productId)
 
     if (error) {
-      console.error('❌ Delete error:', error.message)
       alert('Could not delete product. Try again!')
       return
     }
 
     console.log('✅ Product deleted:', productId)
     fetchProducts()
+  }
+
+  // ✅ Parse sizes
+  function getSizes(sizeString) {
+    if (!sizeString) return []
+    return sizeString.split(',').map(s => s.trim()).filter(s => s)
   }
 
   return (
@@ -183,7 +178,7 @@ function Products({ owner }) {
               { label: 'Product Name *', name: 'product_name', type: 'text',   placeholder: 'e.g. Black Hoodie' },
               { label: 'Price (₹) *',    name: 'price',        type: 'number', placeholder: 'e.g. 999' },
               { label: 'Stock *',        name: 'stock',        type: 'number', placeholder: 'e.g. 50' },
-              { label: 'Size',           name: 'size',         type: 'text',   placeholder: 'e.g. M, L, XL' },
+              { label: 'Size',           name: 'size',         type: 'text',   placeholder: 'e.g. S, M, L, XL, XXL' },
               { label: 'Color',          name: 'color',        type: 'text',   placeholder: 'e.g. Black' },
               { label: 'Category',       name: 'category',     type: 'text',   placeholder: 'e.g. T-Shirts' },
               { label: 'Image URL',      name: 'image_url',    type: 'text',   placeholder: 'https://...' },
@@ -232,69 +227,77 @@ function Products({ owner }) {
       {!loading && !error && products.length === 0 && (
         <div style={styles.center}>
           <p style={styles.emptyText}>📭 No products yet.</p>
-          <p style={styles.emptySubText}>Click "Add Product" to add your first product.</p>
+          <p style={styles.emptySubText}>
+            Click "Add Product" to add your first product.
+          </p>
         </div>
       )}
 
-      {/* Products Table */}
+      {/* ✅ Products Grid — Edit and Delete only */}
       {!loading && !error && products.length > 0 && (
-        <div style={styles.tableWrapper}>
-          <table style={styles.table}>
-            <thead>
-              <tr style={styles.tableHeaderRow}>
-                <th style={styles.th}>📦 Name</th>
-                <th style={styles.th}>💰 Price</th>
-                <th style={styles.th}>📊 Stock</th>
-                <th style={styles.th}>📐 Size</th>
-                <th style={styles.th}>🎨 Color</th>
-                <th style={styles.th}>🏷️ Category</th>
-                <th style={styles.th}>🖼️ Image</th>
-                <th style={styles.th}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {products.map((product) => (
-                <tr key={product.id} style={styles.tableRow}>
-                  <td style={styles.td}><strong>{product.product_name}</strong></td>
-                  <td style={styles.td}>₹{product.price}</td>
-                  <td style={styles.td}>
-                    <span style={{
-                      ...styles.stockBadge,
-                      backgroundColor: product.stock > 10 ? '#e8f5e9' : '#ffebee',
-                      color: product.stock > 10 ? '#2e7d32' : '#c62828'
-                    }}>
-                      {product.stock}
-                    </span>
-                  </td>
-                  <td style={styles.td}>{product.size || '-'}</td>
-                  <td style={styles.td}>{product.color || '-'}</td>
-                  <td style={styles.td}>{product.category || '-'}</td>
-                  <td style={styles.td}>
-                    {product.image_url
-                      ? <img src={product.image_url} alt={product.product_name} style={styles.productImage} />
-                      : <span style={styles.noImage}>No image</span>
-                    }
-                  </td>
-                  <td style={styles.td}>
-                    <div style={styles.actionBtns}>
-                      <button
-                        style={styles.editBtn}
-                        onClick={() => handleEditClick(product)}
-                      >
-                        ✏️ Edit
-                      </button>
-                      <button
-                        style={styles.deleteBtn}
-                        onClick={() => handleDelete(product.id, product.product_name)}
-                      >
-                        🗑️ Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={styles.productsGrid}>
+          {products.map((product) => (
+            <div key={product.id} style={styles.productCard}>
+
+              {/* Product Image */}
+              {product.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt={product.product_name}
+                  style={styles.productImage}
+                />
+              ) : (
+                <div style={styles.noImageBox}>
+                  <span style={styles.noImageText}>🖼️ No Image</span>
+                </div>
+              )}
+
+              {/* Product Details */}
+              <div style={styles.productInfo}>
+                <h3 style={styles.productName}>{product.product_name}</h3>
+                <p style={styles.productPrice}>💰 ₹{product.price}</p>
+                <p style={styles.productMeta}>
+                  🎨 {product.color || '-'} | 🏷️ {product.category || '-'}
+                </p>
+
+                {/* Sizes */}
+                {product.size && (
+                  <div style={styles.sizesRow}>
+                    <span style={styles.sizeLabel}>📐 Sizes:</span>
+                    {getSizes(product.size).map(size => (
+                      <span key={size} style={styles.sizeTag}>{size}</span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Stock badge */}
+                <span style={{
+                  ...styles.stockBadge,
+                  backgroundColor: product.stock > 10 ? '#e8f5e9' : '#ffebee',
+                  color: product.stock > 10 ? '#2e7d32' : '#c62828'
+                }}>
+                  📦 Stock: {product.stock}
+                </span>
+              </div>
+
+              {/* ✅ Edit and Delete only — no Add to Cart */}
+              <div style={styles.cardActions}>
+                <button
+                  style={styles.editBtn}
+                  onClick={() => handleEditClick(product)}
+                >
+                  ✏️ Edit
+                </button>
+                <button
+                  style={styles.deleteBtn}
+                  onClick={() => handleDelete(product.id, product.product_name)}
+                >
+                  🗑️ Delete
+                </button>
+              </div>
+
+            </div>
+          ))}
         </div>
       )}
 
@@ -305,7 +308,7 @@ function Products({ owner }) {
 const styles = {
   container: {
     fontFamily: 'Arial, sans-serif',
-    padding: '20px',
+    padding: '20px 0',
   },
   header: {
     display: 'flex',
@@ -391,73 +394,112 @@ const styles = {
     cursor: 'pointer',
     fontSize: '14px',
   },
-  tableWrapper: {
+  productsGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
+    gap: '16px',
+  },
+  productCard: {
     backgroundColor: '#fff',
     borderRadius: '12px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-    overflowX: 'auto',
+    overflow: 'hidden',
+    display: 'flex',
+    flexDirection: 'column',
   },
-  table: {
+  productImage: {
     width: '100%',
-    borderCollapse: 'collapse',
+    height: '180px',
+    objectFit: 'cover',
   },
-  tableHeaderRow: {
+  noImageBox: {
+    width: '100%',
+    height: '180px',
     backgroundColor: '#f5f5f5',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  th: {
-    padding: '12px 16px',
-    textAlign: 'left',
+  noImageText: {
+    color: '#999',
+    fontSize: '14px',
+  },
+  productInfo: {
+    padding: '16px',
+    flex: 1,
+  },
+  productName: {
+    margin: '0 0 8px',
+    fontSize: '16px',
+    color: '#333',
+  },
+  productPrice: {
+    margin: '0 0 6px',
+    fontSize: '15px',
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  productMeta: {
+    margin: '0 0 8px',
     fontSize: '13px',
     color: '#666',
+  },
+  sizesRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: '4px',
+    marginBottom: '8px',
+  },
+  sizeLabel: {
+    fontSize: '12px',
+    color: '#666',
+    marginRight: '4px',
+  },
+  sizeTag: {
+    padding: '2px 8px',
+    backgroundColor: '#e3f2fd',
+    color: '#1565c0',
+    borderRadius: '4px',
+    fontSize: '12px',
     fontWeight: 'bold',
-    borderBottom: '1px solid #eee',
-  },
-  tableRow: {
-    borderBottom: '1px solid #f0f0f0',
-  },
-  td: {
-    padding: '12px 16px',
-    fontSize: '14px',
-    color: '#333',
-    verticalAlign: 'middle',
   },
   stockBadge: {
+    display: 'inline-block',
     padding: '4px 10px',
     borderRadius: '20px',
     fontSize: '12px',
     fontWeight: 'bold',
+    marginTop: '4px',
   },
-  productImage: {
-    width: '50px',
-    height: '50px',
-    objectFit: 'cover',
-    borderRadius: '6px',
-  },
-  noImage: {
-    color: '#999',
-    fontSize: '12px',
-  },
-  actionBtns: {
+  // ✅ Edit and Delete only
+  cardActions: {
+    padding: '12px 16px',
+    borderTop: '1px solid #f0f0f0',
     display: 'flex',
     gap: '8px',
   },
   editBtn: {
-    padding: '6px 12px',
-    backgroundColor: '#2196F3',
+    flex: 1,
+    padding: '10px',
+    backgroundColor: '#FF9800',
     color: '#fff',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: '8px',
     cursor: 'pointer',
-    fontSize: '12px',
+    fontSize: '13px',
+    fontWeight: 'bold',
   },
   deleteBtn: {
-    padding: '6px 12px',
+    flex: 1,
+    padding: '10px',
     backgroundColor: '#F44336',
     color: '#fff',
     border: 'none',
-    borderRadius: '6px',
+    borderRadius: '8px',
     cursor: 'pointer',
-    fontSize: '12px',
+    fontSize: '13px',
+    fontWeight: 'bold',
   },
   center: {
     textAlign: 'center',
