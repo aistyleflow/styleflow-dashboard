@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from './supabase.js'
 import Login from './Login.js'
-import Products from './Products.js'  // ✅ import Products
+import Products from './products.js'  // ✅ import Products
 
 function App() {
   const [orders, setOrders] = useState([])
