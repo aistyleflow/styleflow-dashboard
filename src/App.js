@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { supabase } from './supabase.js'
 import Login from './Login.js'
 import Products from './Products.js'
+import Settings from './Settings.js'
 
 function App() {
   const [orders, setOrders] = useState([])
@@ -20,6 +21,7 @@ function App() {
     try { localStorage.clear() } catch (e) {}
     setOwner(null)
     setOrders([])
+    setActiveTab('orders')
   }
 
   const fetchOrders = async (storeId) => {
@@ -33,9 +35,7 @@ function App() {
         .from('orders')
         .select('*')
         .eq('store_id', Number(storeId))
-        .order('id', { ascending: true }) // ✅ order 1,2,3... first to last
-
-      console.log("ORDERS RETURNED:", data)
+        .order('id', { ascending: true })
 
       if (error) {
         setError(error.message)
@@ -79,7 +79,7 @@ function App() {
   return (
     <div style={styles.container}>
 
-      {/* Header */}
+      {/* ✅ Header */}
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>🛍️ StyleFlow Dashboard</h1>
@@ -103,31 +103,28 @@ function App() {
         </div>
       </div>
 
-      {/* Tab switcher */}
+      {/* ✅ Tab Bar — Orders, Products, Settings */}
       <div style={styles.tabBar}>
-        <button
-          style={{
-            ...styles.tabBtn,
-            backgroundColor: activeTab === 'orders' ? '#4CAF50' : '#f0f0f0',
-            color: activeTab === 'orders' ? '#fff' : '#333',
-          }}
-          onClick={() => setActiveTab('orders')}
-        >
-          📋 Orders
-        </button>
-        <button
-          style={{
-            ...styles.tabBtn,
-            backgroundColor: activeTab === 'products' ? '#4CAF50' : '#f0f0f0',
-            color: activeTab === 'products' ? '#fff' : '#333',
-          }}
-          onClick={() => setActiveTab('products')}
-        >
-          📦 Products
-        </button>
+        {[
+          { key: 'orders',   label: '📋 Orders'   },
+          { key: 'products', label: '📦 Products'  },
+          { key: 'settings', label: '⚙️ Settings'  },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            style={{
+              ...styles.tabBtn,
+              backgroundColor: activeTab === tab.key ? '#4CAF50' : '#f0f0f0',
+              color: activeTab === tab.key ? '#fff' : '#333',
+            }}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Orders Tab */}
+      {/* ✅ Orders Tab */}
       {activeTab === 'orders' && (
         <>
           <div style={styles.statsBar}>
@@ -178,7 +175,15 @@ function App() {
                     <div>
                       <p style={styles.orderId}>🆔 {String(order.id)}</p>
                       <p style={styles.orderDate}>
-                        🕐 {new Date(order.created_at).toLocaleString()}
+                        🕐 {new Date(order.created_at).toLocaleString('en-IN', {
+                          timeZone: 'Asia/Kolkata',
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true
+                        })}
                       </p>
                     </div>
                     <span style={{
@@ -223,9 +228,14 @@ function App() {
         </>
       )}
 
-      {/* Products Tab */}
+      {/* ✅ Products Tab */}
       {activeTab === 'products' && (
         <Products owner={owner} />
+      )}
+
+      {/* ✅ Settings Tab */}
+      {activeTab === 'settings' && (
+        <Settings owner={owner} />
       )}
 
     </div>
