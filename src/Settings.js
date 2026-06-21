@@ -4,6 +4,7 @@ import { supabase } from './supabase.js'
 function Settings({ owner }) {
   const [form, setForm] = useState({
     shop_name: '',
+    owner_name: '',
     phone_number: '',
     address: '',
     instagram: '',
@@ -16,8 +17,6 @@ function Settings({ owner }) {
 
   useEffect(() => {
     fetchSettings()
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function fetchSettings() {
@@ -38,6 +37,7 @@ function Settings({ owner }) {
       if (data) {
         setForm({
           shop_name:    data.shop_name    || '',
+          owner_name:   data.owner_name   || '',
           phone_number: data.phone_number || '',
           address:      data.address      || '',
           instagram:    data.instagram    || '',
@@ -66,6 +66,7 @@ function Settings({ owner }) {
         .from('shop_owners')
         .update({
           shop_name:   form.shop_name,
+          owner_name:  form.owner_name,
           address:     form.address,
           instagram:   form.instagram,
           description: form.description
@@ -103,14 +104,12 @@ function Settings({ owner }) {
         <h2 style={styles.title}>⚙️ Store Settings</h2>
       </div>
 
-      {/* ✅ Success message */}
       {success && (
         <div style={styles.successBox}>
           ✅ Settings saved successfully!
         </div>
       )}
 
-      {/* ✅ Error message */}
       {error && (
         <div style={styles.errorBox}>
           ❌ Error: {error}
@@ -128,6 +127,19 @@ function Settings({ owner }) {
             name="shop_name"
             placeholder="Enter your store name"
             value={form.shop_name}
+            onChange={handleChange}
+          />
+        </div>
+
+        {/* Owner Name */}
+        <div style={styles.formField}>
+          <label style={styles.label}>👤 Owner Name</label>
+          <input
+            style={styles.input}
+            type="text"
+            name="owner_name"
+            placeholder="Enter your name"
+            value={form.owner_name}
             onChange={handleChange}
           />
         </div>
