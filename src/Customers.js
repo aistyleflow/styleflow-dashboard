@@ -20,33 +20,47 @@ function Customers({ owner }) {
       setLoading(true)
       setError(null)
 
-      // ✅ Fetch from customers table directly
-      const { data, error } = await supabase
-        .from('customers')
+      // ✅ Fetch ALL orders for this store — includes old + new orders
+      const { data: orders, error } = await supabase
+        .from('orders')
         .select('*')
         .eq('store_id', Number(owner.id))
-        .order('total_spent', { ascending: false })
+        .order('created_at', { ascending: false })
 
       if (error) { setError(error.message); return }
 
-      // ✅ For each customer fetch their order history separately
-      const enriched = await Promise.all(
-        (data || []).map(async (customer) => {
-          const { data: orders } = await supabase
-            .from('orders')
-            .select('*')
-            .eq('phone_number', customer.phone_number)
-            .eq('store_id', Number(owner.id))
-            .order('created_at', { ascending: false })
-
-          return {
-            ...customer,
-            orders: orders || [],
+      // ✅ Group orders by phone_number to build CRM customer list
+      const customerMap = {}
+      ;(orders || []).forEach((order) => {
+        const key = order.phone_number
+        if (!customerMap[key]) {
+          customerMap[key] = {
+            phone_number: order.phone_number,
+            customer_name: order.customer_name || 'N/A',
+            customer_address: order.customer_address || 'N/A',
+            orders: [],
+            total_orders: 0,
+            total_spent: 0,
+            last_order_date: null,
           }
-        })
-      )
+        }
+        customerMap[key].orders.push(order)
+        customerMap[key].total_orders += 1
+        customerMap[key].total_spent += Number(order.total_amount || 0)
 
-      setCustomers(enriched)
+        // ✅ Track latest order date
+        if (
+          !customerMap[key].last_order_date ||
+          new Date(order.created_at) > new Date(customerMap[key].last_order_date)
+        ) {
+          customerMap[key].last_order_date = order.created_at
+        }
+      })
+
+      const list = Object.values(customerMap).sort(
+        (a, b) => b.total_orders - a.total_orders
+      )
+      setCustomers(list)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -65,12 +79,13 @@ function Customers({ owner }) {
     }
   }
 
-  // ✅ Step 2 — filter & sort logic
+  // ✅ Search filter
   let filtered = customers.filter((c) =>
     c.customer_name.toLowerCase().includes(search.toLowerCase()) ||
     c.phone_number.includes(search)
   )
 
+  // ✅ Sort/filter by selected filter
   if (filter === 'top') {
     filtered.sort((a, b) => b.total_spent - a.total_spent)
   }
@@ -102,7 +117,7 @@ function Customers({ owner }) {
           </button>
           <h2 style={styles.modalTitle}>👤 {selectedCustomer.customer_name}</h2>
           <p style={styles.modalSub}>📱 {selectedCustomer.phone_number}</p>
-          <p style={styles.modalSub}>📍 {selectedCustomer.customer_address || 'N/A'}</p>
+          <p style={styles.modalSub}>📍 {selectedCustomer.customer_address}</p>
 
           <div style={styles.modalStats}>
             <div style={styles.modalStatCard}>
@@ -118,7 +133,7 @@ function Customers({ owner }) {
               <span style={styles.modalStatLabel}>Total Spent</span>
             </div>
             <div style={styles.modalStatCard}>
-              <span style={{ ...styles.modalStatNum, color: '#2196F3' }}>
+              <span style={{ ...styles.modalStatNum, color: '#2196F3', fontSize: '13px' }}>
                 {selectedCustomer.last_order_date
                   ? new Date(selectedCustomer.last_order_date).toLocaleDateString('en-IN', {
                       timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric'
@@ -197,12 +212,12 @@ function Customers({ owner }) {
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      {/* ✅ Step 3 — Filter Buttons */}
+      {/* ✅ Filter Buttons */}
       <div style={styles.filterBar}>
         {[
-          { key: 'all',      label: '👥 All Customers'    },
-          { key: 'top',      label: '🏆 Top Customers'    },
-          { key: 'recent',   label: '🕐 Recent Customers' },
+          { key: 'all',      label: '👥 All Customers'       },
+          { key: 'top',      label: '🏆 Top Customers'       },
+          { key: 'recent',   label: '🕐 Recent Customers'    },
           { key: 'inactive', label: '😴 Inactive (30+ days)' },
         ].map((f) => (
           <button
@@ -240,21 +255,21 @@ function Customers({ owner }) {
               </div>
             </div>
 
-            <p style={styles.customerAddress}>
-              📍 {customer.customer_address || 'N/A'}
-            </p>
+            <p style={styles.customerAddress}>📍 {customer.customer_address}</p>
 
             <div style={styles.customerStats}>
               <div style={styles.miniStat}>
                 <span style={styles.miniNum}>{customer.total_orders}</span>
                 <span style={styles.miniLabel}>Orders</span>
               </div>
-              <div style={styles.miniStat}>
-                <span style={{ ...styles.miniNum, color: '#4CAF50' }}>
-                  ₹{Number(customer.total_spent).toLocaleString('en-IN')}
-                </span>
-                <span style={styles.miniLabel}>Total Spent</span>
-              </div>
+              {customer.total_spent > 0 && (
+                <div style={styles.miniStat}>
+                  <span style={{ ...styles.miniNum, color: '#4CAF50' }}>
+                    ₹{Number(customer.total_spent).toLocaleString('en-IN')}
+                  </span>
+                  <span style={styles.miniLabel}>Total Spent</span>
+                </div>
+              )}
               <div style={styles.miniStat}>
                 <span style={styles.miniNum}>
                   {customer.total_orders > 1 ? '🔁 Repeat' : '🆕 New'}
@@ -339,7 +354,6 @@ const styles = {
     border: 'none', borderRadius: '8px', cursor: 'pointer',
     fontSize: '13px', fontWeight: 'bold', marginTop: '4px',
   },
-  // Modal styles
   modalHeader: {
     backgroundColor: '#fff', borderRadius: '12px', padding: '20px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)', marginBottom: '20px',
