@@ -3,7 +3,6 @@ import { supabase } from './supabase.js'
 import Login from './Login.js'
 import Products from './Products.js'
 import Settings from './Settings.js'
-import Customers from './Customers.js'   // ✅ ADDED
 
 function App() {
   const [orders, setOrders] = useState([])
@@ -30,13 +29,11 @@ function App() {
       setLoading(true)
       setError(null)
 
-      console.log("STORE ID:", storeId)
-
       const { data, error } = await supabase
         .from('orders')
         .select('*')
         .eq('store_id', Number(storeId))
-        .order('id', { ascending: true })
+        .order('store_order_number', { ascending: true }) // ✅ order by store_order_number
 
       if (error) {
         setError(error.message)
@@ -80,7 +77,6 @@ function App() {
   return (
     <div style={styles.container}>
 
-      {/* ✅ Header */}
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>🛍️ StyleFlow Dashboard</h1>
@@ -92,10 +88,7 @@ function App() {
           <span style={styles.ownerName}>
             👤 {owner.owner_name || owner.phone_number}
           </span>
-          <button
-            style={styles.refreshBtn}
-            onClick={() => fetchOrders(owner.id)}
-          >
+          <button style={styles.refreshBtn} onClick={() => fetchOrders(owner.id)}>
             🔄 Refresh
           </button>
           <button style={styles.logoutBtn} onClick={handleLogout}>
@@ -104,13 +97,11 @@ function App() {
         </div>
       </div>
 
-      {/* ✅ Tab Bar — Orders, Products, Customers, Settings */}
       <div style={styles.tabBar}>
         {[
-          { key: 'orders',    label: '📋 Orders'    },
-          { key: 'products',  label: '📦 Products'  },
-          { key: 'customers', label: '👥 Customers' },  // ✅ ADDED
-          { key: 'settings',  label: '⚙️ Settings'  },
+          { key: 'orders',   label: '📋 Orders'   },
+          { key: 'products', label: '📦 Products'  },
+          { key: 'settings', label: '⚙️ Settings'  },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -126,7 +117,6 @@ function App() {
         ))}
       </div>
 
-      {/* ✅ Orders Tab */}
       {activeTab === 'orders' && (
         <>
           <div style={styles.statsBar}>
@@ -153,18 +143,14 @@ function App() {
           {error && (
             <div style={styles.errorBox}>
               <p>❌ Error: {error}</p>
-              <button style={styles.retryBtn} onClick={() => fetchOrders(owner.id)}>
-                Retry
-              </button>
+              <button style={styles.retryBtn} onClick={() => fetchOrders(owner.id)}>Retry</button>
             </div>
           )}
 
           {!loading && !error && orders.length === 0 && (
             <div style={styles.center}>
               <p style={styles.emptyText}>📭 No orders yet.</p>
-              <p style={styles.emptySubText}>
-                Orders for {owner.shop_name} will appear here.
-              </p>
+              <p style={styles.emptySubText}>Orders for {owner.shop_name} will appear here.</p>
             </div>
           )}
 
@@ -175,7 +161,10 @@ function App() {
 
                   <div style={styles.orderHeader}>
                     <div>
-                      <p style={styles.orderId}>🆔 {String(order.id)}</p>
+                      {/* ✅ Show store_order_number */}
+                      <p style={styles.orderId}>
+                        🆔 Order #{order.store_order_number || order.id}
+                      </p>
                       <p style={styles.orderDate}>
                         🕐 {new Date(order.created_at).toLocaleString('en-IN', {
                           timeZone: 'Asia/Kolkata',
@@ -230,20 +219,8 @@ function App() {
         </>
       )}
 
-      {/* ✅ Products Tab */}
-      {activeTab === 'products' && (
-        <Products owner={owner} />
-      )}
-
-      {/* ✅ Customers Tab */}
-      {activeTab === 'customers' && (
-        <Customers owner={owner} />
-      )}
-
-      {/* ✅ Settings Tab */}
-      {activeTab === 'settings' && (
-        <Settings owner={owner} />
-      )}
+      {activeTab === 'products' && <Products owner={owner} />}
+      {activeTab === 'settings' && <Settings owner={owner} />}
 
     </div>
   )
@@ -273,172 +250,67 @@ const styles = {
     alignItems: 'center',
     gap: '12px',
   },
-  title: {
-    margin: 0,
-    fontSize: '24px',
-    color: '#333',
-  },
-  storeInfo: {
-    margin: '4px 0 0',
-    fontSize: '13px',
-    color: '#999',
-  },
-  ownerName: {
-    fontSize: '14px',
-    color: '#555',
-    fontWeight: 'bold',
-  },
+  title: { margin: 0, fontSize: '24px', color: '#333' },
+  storeInfo: { margin: '4px 0 0', fontSize: '13px', color: '#999' },
+  ownerName: { fontSize: '14px', color: '#555', fontWeight: 'bold' },
   refreshBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#4CAF50',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
+    padding: '8px 16px', backgroundColor: '#4CAF50', color: '#fff',
+    border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px',
   },
   logoutBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#F44336',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
+    padding: '8px 16px', backgroundColor: '#F44336', color: '#fff',
+    border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px',
   },
-  tabBar: {
-    display: 'flex',
-    gap: '12px',
-    marginBottom: '20px',
-  },
+  tabBar: { display: 'flex', gap: '12px', marginBottom: '20px' },
   tabBtn: {
-    padding: '10px 24px',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 'bold',
+    padding: '10px 24px', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', fontSize: '14px', fontWeight: 'bold',
   },
-  statsBar: {
-    display: 'flex',
-    gap: '12px',
-    marginBottom: '20px',
-  },
+  statsBar: { display: 'flex', gap: '12px', marginBottom: '20px' },
   statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    padding: '16px',
-    borderRadius: '12px',
-    textAlign: 'center',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
+    flex: 1, backgroundColor: '#fff', padding: '16px', borderRadius: '12px',
+    textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    display: 'flex', flexDirection: 'column', gap: '4px',
   },
-  statNumber: {
-    fontSize: '26px',
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    fontSize: '12px',
-    color: '#999',
-  },
-  ordersList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-  },
+  statNumber: { fontSize: '26px', fontWeight: 'bold' },
+  statLabel: { fontSize: '12px', color: '#999' },
+  ordersList: { display: 'flex', flexDirection: 'column', gap: '16px' },
   orderCard: {
-    backgroundColor: '#fff',
-    borderRadius: '12px',
-    padding: '20px',
+    backgroundColor: '#fff', borderRadius: '12px', padding: '20px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
   },
   orderHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '12px',
+    display: 'flex', justifyContent: 'space-between',
+    alignItems: 'flex-start', marginBottom: '12px',
   },
-  orderId: {
-    margin: 0,
-    fontSize: '13px',
-    color: '#999',
-    fontFamily: 'monospace',
-  },
-  orderDate: {
-    margin: '4px 0 0',
-    fontSize: '13px',
-    color: '#999',
-  },
+  orderId: { margin: 0, fontSize: '13px', color: '#999', fontFamily: 'monospace' },
+  orderDate: { margin: '4px 0 0', fontSize: '13px', color: '#999' },
   statusBadge: {
-    padding: '4px 12px',
-    borderRadius: '20px',
-    color: '#fff',
-    fontSize: '12px',
-    fontWeight: 'bold',
+    padding: '4px 12px', borderRadius: '20px', color: '#fff',
+    fontSize: '12px', fontWeight: 'bold',
   },
   customerDetails: {
-    borderTop: '1px solid #f0f0f0',
-    borderBottom: '1px solid #f0f0f0',
-    padding: '12px 0',
-    marginBottom: '12px',
-    lineHeight: '1.8',
+    borderTop: '1px solid #f0f0f0', borderBottom: '1px solid #f0f0f0',
+    padding: '12px 0', marginBottom: '12px', lineHeight: '1.8',
   },
-  statusButtons: {
-    marginTop: '8px',
-  },
-  updateLabel: {
-    margin: '0 0 8px',
-    fontSize: '13px',
-    color: '#666',
-  },
-  btnRow: {
-    display: 'flex',
-    gap: '8px',
-    flexWrap: 'wrap',
-  },
+  statusButtons: { marginTop: '8px' },
+  updateLabel: { margin: '0 0 8px', fontSize: '13px', color: '#666' },
+  btnRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
   statusBtn: {
-    padding: '6px 12px',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: 'bold',
-    textTransform: 'capitalize',
+    padding: '6px 12px', border: 'none', borderRadius: '6px',
+    cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', textTransform: 'capitalize',
   },
-  center: {
-    textAlign: 'center',
-    padding: '60px',
-  },
-  loadingText: {
-    fontSize: '18px',
-    color: '#999',
-  },
-  emptyText: {
-    fontSize: '20px',
-    color: '#666',
-  },
-  emptySubText: {
-    fontSize: '14px',
-    color: '#999',
-  },
+  center: { textAlign: 'center', padding: '60px' },
+  loadingText: { fontSize: '18px', color: '#999' },
+  emptyText: { fontSize: '20px', color: '#666' },
+  emptySubText: { fontSize: '14px', color: '#999' },
   errorBox: {
-    backgroundColor: '#ffebee',
-    border: '1px solid #ffcdd2',
-    borderRadius: '8px',
-    padding: '16px',
-    textAlign: 'center',
-    color: '#c62828',
+    backgroundColor: '#ffebee', border: '1px solid #ffcdd2',
+    borderRadius: '8px', padding: '16px', textAlign: 'center', color: '#c62828',
   },
   retryBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#F44336',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    marginTop: '8px',
+    padding: '8px 16px', backgroundColor: '#F44336', color: '#fff',
+    border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '8px',
   },
 }
 
