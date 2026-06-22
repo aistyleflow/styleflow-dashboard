@@ -7,6 +7,7 @@ function Customers({ owner }) {
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [filter, setFilter] = useState('all')
 
   useEffect(() => {
     if (owner?.id) fetchCustomers()
@@ -19,35 +20,33 @@ function Customers({ owner }) {
       setLoading(true)
       setError(null)
 
+      // ✅ Fetch from customers table directly
       const { data, error } = await supabase
-        .from('orders')
+        .from('customers')
         .select('*')
         .eq('store_id', Number(owner.id))
-        .order('created_at', { ascending: false })
+        .order('total_spent', { ascending: false })
 
       if (error) { setError(error.message); return }
 
-      // Group orders by phone number → build CRM customer list
-      const customerMap = {}
-      ;(data || []).forEach((order) => {
-        const key = order.phone_number
-        if (!customerMap[key]) {
-          customerMap[key] = {
-            phone_number: order.phone_number,
-            customer_name: order.customer_name || 'N/A',
-            customer_address: order.customer_address || 'N/A',
-            orders: [],
-            total_spent: 0,
-          }
-        }
-        customerMap[key].orders.push(order)
-        customerMap[key].total_spent += Number(order.total_amount || 0)
-      })
+      // ✅ For each customer fetch their order history separately
+      const enriched = await Promise.all(
+        (data || []).map(async (customer) => {
+          const { data: orders } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('phone_number', customer.phone_number)
+            .eq('store_id', Number(owner.id))
+            .order('created_at', { ascending: false })
 
-      const list = Object.values(customerMap).sort(
-        (a, b) => b.orders.length - a.orders.length
+          return {
+            ...customer,
+            orders: orders || [],
+          }
+        })
       )
-      setCustomers(list)
+
+      setCustomers(enriched)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -66,12 +65,34 @@ function Customers({ owner }) {
     }
   }
 
-  const filtered = customers.filter((c) =>
+  // ✅ Step 2 — filter & sort logic
+  let filtered = customers.filter((c) =>
     c.customer_name.toLowerCase().includes(search.toLowerCase()) ||
     c.phone_number.includes(search)
   )
 
-  // ─── Order History Modal ───────────────────────────────────────────────────
+  if (filter === 'top') {
+    filtered.sort((a, b) => b.total_spent - a.total_spent)
+  }
+
+  if (filter === 'recent') {
+    filtered.sort(
+      (a, b) =>
+        new Date(b.orders[0]?.created_at || 0) -
+        new Date(a.orders[0]?.created_at || 0)
+    )
+  }
+
+  if (filter === 'inactive') {
+    const today = new Date()
+    filtered = filtered.filter((customer) => {
+      const lastOrder = new Date(customer.orders[0]?.created_at)
+      const diffDays = (today - lastOrder) / (1000 * 60 * 60 * 24)
+      return diffDays > 30
+    })
+  }
+
+  // ─── Order History View ────────────────────────────────────────────────────
   if (selectedCustomer) {
     return (
       <div style={styles.container}>
@@ -79,14 +100,40 @@ function Customers({ owner }) {
           <button style={styles.backBtn} onClick={() => setSelectedCustomer(null)}>
             ← Back to Customers
           </button>
-          <h2 style={styles.modalTitle}>
-            👤 {selectedCustomer.customer_name}
-          </h2>
+          <h2 style={styles.modalTitle}>👤 {selectedCustomer.customer_name}</h2>
           <p style={styles.modalSub}>📱 {selectedCustomer.phone_number}</p>
-          <p style={styles.modalSub}>📍 {selectedCustomer.customer_address}</p>
+          <p style={styles.modalSub}>📍 {selectedCustomer.customer_address || 'N/A'}</p>
+
+          <div style={styles.modalStats}>
+            <div style={styles.modalStatCard}>
+              <span style={{ ...styles.modalStatNum, color: '#333' }}>
+                {selectedCustomer.total_orders}
+              </span>
+              <span style={styles.modalStatLabel}>Total Orders</span>
+            </div>
+            <div style={styles.modalStatCard}>
+              <span style={{ ...styles.modalStatNum, color: '#4CAF50' }}>
+                ₹{Number(selectedCustomer.total_spent).toLocaleString('en-IN')}
+              </span>
+              <span style={styles.modalStatLabel}>Total Spent</span>
+            </div>
+            <div style={styles.modalStatCard}>
+              <span style={{ ...styles.modalStatNum, color: '#2196F3' }}>
+                {selectedCustomer.last_order_date
+                  ? new Date(selectedCustomer.last_order_date).toLocaleDateString('en-IN', {
+                      timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric'
+                    })
+                  : 'N/A'}
+              </span>
+              <span style={styles.modalStatLabel}>Last Order</span>
+            </div>
+          </div>
         </div>
 
-        <h3 style={styles.sectionTitle}>🧾 Order History ({selectedCustomer.orders.length})</h3>
+        <h3 style={styles.sectionTitle}>
+          🧾 Order History ({selectedCustomer.orders.length})
+        </h3>
+
         <div style={styles.ordersList}>
           {selectedCustomer.orders.map((order) => (
             <div key={order.id} style={styles.orderCard}>
@@ -107,7 +154,9 @@ function Customers({ owner }) {
                 })}
               </p>
               {order.total_amount && (
-                <p style={styles.orderAmount}>💰 ₹{Number(order.total_amount).toLocaleString('en-IN')}</p>
+                <p style={styles.orderAmount}>
+                  💰 ₹{Number(order.total_amount).toLocaleString('en-IN')}
+                </p>
               )}
             </div>
           ))}
@@ -128,13 +177,13 @@ function Customers({ owner }) {
         </div>
         <div style={styles.statCard}>
           <span style={{ ...styles.statNumber, color: '#4CAF50' }}>
-            {customers.filter(c => c.orders.length > 1).length}
+            {customers.filter(c => c.total_orders > 1).length}
           </span>
           <span style={styles.statLabel}>🔁 Repeat Customers</span>
         </div>
         <div style={styles.statCard}>
           <span style={{ ...styles.statNumber, color: '#2196F3' }}>
-            {customers.filter(c => c.orders.length === 1).length}
+            {customers.filter(c => c.total_orders === 1).length}
           </span>
           <span style={styles.statLabel}>🆕 New Customers</span>
         </div>
@@ -147,6 +196,28 @@ function Customers({ owner }) {
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
+
+      {/* ✅ Step 3 — Filter Buttons */}
+      <div style={styles.filterBar}>
+        {[
+          { key: 'all',      label: '👥 All Customers'    },
+          { key: 'top',      label: '🏆 Top Customers'    },
+          { key: 'recent',   label: '🕐 Recent Customers' },
+          { key: 'inactive', label: '😴 Inactive (30+ days)' },
+        ].map((f) => (
+          <button
+            key={f.key}
+            style={{
+              ...styles.filterBtn,
+              backgroundColor: filter === f.key ? '#4CAF50' : '#f0f0f0',
+              color: filter === f.key ? '#fff' : '#333',
+            }}
+            onClick={() => setFilter(f.key)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
 
       {loading && <p style={styles.center}>⏳ Loading customers...</p>}
       {error   && <p style={{ color: 'red', textAlign: 'center' }}>❌ {error}</p>}
@@ -169,32 +240,36 @@ function Customers({ owner }) {
               </div>
             </div>
 
-            <p style={styles.customerAddress}>📍 {customer.customer_address}</p>
+            <p style={styles.customerAddress}>
+              📍 {customer.customer_address || 'N/A'}
+            </p>
 
             <div style={styles.customerStats}>
               <div style={styles.miniStat}>
-                <span style={styles.miniNum}>{customer.orders.length}</span>
+                <span style={styles.miniNum}>{customer.total_orders}</span>
                 <span style={styles.miniLabel}>Orders</span>
               </div>
-              {customer.total_spent > 0 && (
-                <div style={styles.miniStat}>
-                  <span style={{ ...styles.miniNum, color: '#4CAF50' }}>
-                    ₹{Number(customer.total_spent).toLocaleString('en-IN')}
-                  </span>
-                  <span style={styles.miniLabel}>Total Spent</span>
-                </div>
-              )}
+              <div style={styles.miniStat}>
+                <span style={{ ...styles.miniNum, color: '#4CAF50' }}>
+                  ₹{Number(customer.total_spent).toLocaleString('en-IN')}
+                </span>
+                <span style={styles.miniLabel}>Total Spent</span>
+              </div>
               <div style={styles.miniStat}>
                 <span style={styles.miniNum}>
-                  {customer.orders.length > 1 ? '🔁 Repeat' : '🆕 New'}
+                  {customer.total_orders > 1 ? '🔁 Repeat' : '🆕 New'}
                 </span>
               </div>
             </div>
 
             <p style={styles.lastOrder}>
-              🕐 Last order: {new Date(customer.orders[0].created_at).toLocaleDateString('en-IN', {
-                timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short', year: 'numeric'
-              })}
+              🕐 Last order:{' '}
+              {customer.last_order_date
+                ? new Date(customer.last_order_date).toLocaleDateString('en-IN', {
+                    timeZone: 'Asia/Kolkata',
+                    day: 'numeric', month: 'short', year: 'numeric'
+                  })
+                : 'N/A'}
             </p>
 
             <button
@@ -225,8 +300,14 @@ const styles = {
   searchInput: {
     width: '100%', padding: '12px 16px', fontSize: '14px',
     borderRadius: '10px', border: '1px solid #ddd',
-    marginBottom: '20px', boxSizing: 'border-box',
-    outline: 'none',
+    marginBottom: '16px', boxSizing: 'border-box', outline: 'none',
+  },
+  filterBar: {
+    display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '20px',
+  },
+  filterBtn: {
+    padding: '8px 18px', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', fontSize: '13px', fontWeight: 'bold',
   },
   grid: {
     display: 'grid',
@@ -270,13 +351,26 @@ const styles = {
   },
   modalTitle: { margin: '0 0 4px', fontSize: '20px', color: '#333' },
   modalSub: { margin: '4px 0 0', fontSize: '14px', color: '#666' },
+  modalStats: {
+    display: 'flex', gap: '12px', marginTop: '16px', flexWrap: 'wrap',
+  },
+  modalStatCard: {
+    flex: 1, backgroundColor: '#f9f9f9', padding: '12px',
+    borderRadius: '10px', textAlign: 'center',
+    display: 'flex', flexDirection: 'column', gap: '4px',
+  },
+  modalStatNum: { fontSize: '18px', fontWeight: 'bold' },
+  modalStatLabel: { fontSize: '11px', color: '#999' },
   sectionTitle: { margin: '0 0 12px', fontSize: '16px', color: '#333' },
   ordersList: { display: 'flex', flexDirection: 'column', gap: '12px' },
   orderCard: {
     backgroundColor: '#fff', borderRadius: '10px', padding: '16px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
   },
-  orderRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' },
+  orderRow: {
+    display: 'flex', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: '6px',
+  },
   orderId: { fontSize: '13px', color: '#999', fontFamily: 'monospace' },
   statusBadge: {
     padding: '4px 12px', borderRadius: '20px', color: '#fff',
