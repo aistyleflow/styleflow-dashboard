@@ -10,6 +10,8 @@ function Customers({ owner }) {
 
   useEffect(() => {
     if (owner?.id) fetchCustomers()
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [owner])
 
   const fetchCustomers = async () => {
