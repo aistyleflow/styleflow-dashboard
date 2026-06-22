@@ -3,6 +3,7 @@ import { supabase } from './supabase.js'
 import Login from './Login.js'
 import Products from './Products.js'
 import Settings from './Settings.js'
+import Customers from './Customers.js'   // ✅ ADDED
 
 function App() {
   const [orders, setOrders] = useState([])
@@ -103,12 +104,13 @@ function App() {
         </div>
       </div>
 
-      {/* ✅ Tab Bar — Orders, Products, Settings */}
+      {/* ✅ Tab Bar — Orders, Products, Customers, Settings */}
       <div style={styles.tabBar}>
         {[
-          { key: 'orders',   label: '📋 Orders'   },
-          { key: 'products', label: '📦 Products'  },
-          { key: 'settings', label: '⚙️ Settings'  },
+          { key: 'orders',    label: '📋 Orders'    },
+          { key: 'products',  label: '📦 Products'  },
+          { key: 'customers', label: '👥 Customers' },  // ✅ ADDED
+          { key: 'settings',  label: '⚙️ Settings'  },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -231,6 +233,11 @@ function App() {
       {/* ✅ Products Tab */}
       {activeTab === 'products' && (
         <Products owner={owner} />
+      )}
+
+      {/* ✅ Customers Tab */}
+      {activeTab === 'customers' && (
+        <Customers owner={owner} />
       )}
 
       {/* ✅ Settings Tab */}
