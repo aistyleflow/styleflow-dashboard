@@ -7,6 +7,7 @@ import Customers from './Customers.js'
 
 function App() {
   const [orders, setOrders] = useState([])
+  const [orderItems, setOrderItems] = useState({})  // ✅ NEW
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [owner, setOwner] = useState(null)
@@ -22,6 +23,7 @@ function App() {
     try { localStorage.clear() } catch (e) {}
     setOwner(null)
     setOrders([])
+    setOrderItems({})  // ✅ NEW
     setActiveTab('orders')
   }
 
@@ -36,7 +38,7 @@ function App() {
         .from('orders')
         .select('*')
         .eq('store_id', Number(storeId))
-        .order('store_order_number', { ascending: true }) // ✅ changed to store_order_number
+        .order('store_order_number', { ascending: true })
 
       if (error) {
         setError(error.message)
@@ -44,6 +46,17 @@ function App() {
       }
 
       setOrders(data || [])
+
+      // ✅ NEW: fetch order items for each order
+      const itemsMap = {}
+      for (const order of (data || [])) {
+        const { data: items } = await supabase
+          .from('order_items')
+          .select('quantity, product_id, products(product_name, price)')
+          .eq('order_id', order.id)
+        itemsMap[order.id] = items || []
+      }
+      setOrderItems(itemsMap)
 
     } catch (err) {
       setError(err.message)
@@ -170,14 +183,14 @@ function App() {
 
           {!loading && !error && orders.length > 0 && (
             <div style={styles.ordersList}>
-              {orders.map((order) => (
+              {orders.map((order, index) => (
                 <div key={order.id} style={styles.orderCard}>
 
                   <div style={styles.orderHeader}>
                     <div>
-                      {/* ✅ Only this line changed — show store_order_number */}
+                      {/* ✅ Serial number + store_order_number */}
                       <p style={styles.orderId}>
-                        🆔 Order #{order.store_order_number || order.id}
+                        #{index + 1} &nbsp;|&nbsp; 🆔 Order #{order.store_order_number || order.id}
                       </p>
                       <p style={styles.orderDate}>
                         🕐 {new Date(order.created_at).toLocaleString('en-IN', {
@@ -204,6 +217,23 @@ function App() {
                     <p>📱 {order.phone_number}</p>
                     <p>📍 {order.customer_address || 'N/A'}</p>
                   </div>
+
+                  {/* ✅ NEW: Ordered Products */}
+                  {orderItems[order.id] && orderItems[order.id].length > 0 && (
+                    <div style={styles.itemsList}>
+                      <p style={styles.itemsTitle}>🛍️ Ordered Products:</p>
+                      {orderItems[order.id].map((item, i) => {
+                        const name = item.products?.product_name || 'Unknown'
+                        const price = item.products?.price || 0
+                        const total = price * item.quantity
+                        return (
+                          <p key={i} style={styles.itemRow}>
+                            • {name} × {item.quantity} = ₹{total}
+                          </p>
+                        )
+                      })}
+                    </div>
+                  )}
 
                   <div style={styles.statusButtons}>
                     <p style={styles.updateLabel}>Update Status:</p>
@@ -387,6 +417,24 @@ const styles = {
     padding: '12px 0',
     marginBottom: '12px',
     lineHeight: '1.8',
+  },
+  // ✅ NEW styles
+  itemsList: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: '8px',
+    padding: '10px 14px',
+    marginBottom: '12px',
+  },
+  itemsTitle: {
+    margin: '0 0 6px',
+    fontSize: '13px',
+    fontWeight: 'bold',
+    color: '#555',
+  },
+  itemRow: {
+    margin: '2px 0',
+    fontSize: '13px',
+    color: '#333',
   },
   statusButtons: {
     marginTop: '8px',
