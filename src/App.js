@@ -7,7 +7,7 @@ import Customers from './Customers.js'
 
 function App() {
   const [orders, setOrders] = useState([])
-  const [orderItems, setOrderItems] = useState({})  // ✅ NEW
+  const [orderItems, setOrderItems] = useState({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [owner, setOwner] = useState(null)
@@ -23,7 +23,7 @@ function App() {
     try { localStorage.clear() } catch (e) {}
     setOwner(null)
     setOrders([])
-    setOrderItems({})  // ✅ NEW
+    setOrderItems({})
     setActiveTab('orders')
   }
 
@@ -47,7 +47,7 @@ function App() {
 
       setOrders(data || [])
 
-      // ✅ NEW: fetch order items for each order
+      // ✅ Fetch order items for each order
       const itemsMap = {}
       for (const order of (data || [])) {
         const { data: items } = await supabase
@@ -93,7 +93,7 @@ function App() {
   return (
     <div style={styles.container}>
 
-      {/* Header */}
+      {/* ✅ Header */}
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>🛍️ StyleFlow Dashboard</h1>
@@ -117,7 +117,7 @@ function App() {
         </div>
       </div>
 
-      {/* Tab Bar */}
+      {/* ✅ Tab Bar */}
       <div style={styles.tabBar}>
         {[
           { key: 'orders',    label: '📋 Orders'    },
@@ -139,7 +139,7 @@ function App() {
         ))}
       </div>
 
-      {/* Orders Tab */}
+      {/* ✅ Orders Tab */}
       {activeTab === 'orders' && (
         <>
           <div style={styles.statsBar}>
@@ -188,7 +188,6 @@ function App() {
 
                   <div style={styles.orderHeader}>
                     <div>
-                      {/* ✅ Serial number + store_order_number */}
                       <p style={styles.orderId}>
                         #{index + 1} &nbsp;|&nbsp; 🆔 Order #{order.store_order_number || order.id}
                       </p>
@@ -212,18 +211,19 @@ function App() {
                     </span>
                   </div>
 
+                  {/* ✅ Customer Details */}
                   <div style={styles.customerDetails}>
                     <p>👤 <strong>{order.customer_name || 'N/A'}</strong></p>
                     <p>📱 {order.phone_number}</p>
                     <p>📍 {order.customer_address || 'N/A'}</p>
                   </div>
 
-                  {/* ✅ NEW: Ordered Products */}
+                  {/* ✅ Ordered Products */}
                   {orderItems[order.id] && orderItems[order.id].length > 0 && (
                     <div style={styles.itemsList}>
                       <p style={styles.itemsTitle}>🛍️ Ordered Products:</p>
                       {orderItems[order.id].map((item, i) => {
-                        const name = item.products?.product_name || 'Unknown'
+                        const name  = item.products?.product_name || 'Unknown'
                         const price = item.products?.price || 0
                         const total = price * item.quantity
                         return (
@@ -232,9 +232,15 @@ function App() {
                           </p>
                         )
                       })}
+                      <p style={styles.itemTotal}>
+                        💰 Total: ₹{orderItems[order.id].reduce((sum, item) => {
+                          return sum + ((item.products?.price || 0) * item.quantity)
+                        }, 0)}
+                      </p>
                     </div>
                   )}
 
+                  {/* ✅ Status Buttons */}
                   <div style={styles.statusButtons}>
                     <p style={styles.updateLabel}>Update Status:</p>
                     <div style={styles.btnRow}>
@@ -263,17 +269,17 @@ function App() {
         </>
       )}
 
-      {/* Products Tab */}
+      {/* ✅ Products Tab */}
       {activeTab === 'products' && (
         <Products owner={owner} />
       )}
 
-      {/* Customers Tab */}
+      {/* ✅ Customers Tab */}
       {activeTab === 'customers' && (
         <Customers owner={owner} />
       )}
 
-      {/* Settings Tab */}
+      {/* ✅ Settings Tab */}
       {activeTab === 'settings' && (
         <Settings owner={owner} />
       )}
@@ -418,7 +424,6 @@ const styles = {
     marginBottom: '12px',
     lineHeight: '1.8',
   },
-  // ✅ NEW styles
   itemsList: {
     backgroundColor: '#f9f9f9',
     borderRadius: '8px',
@@ -435,6 +440,12 @@ const styles = {
     margin: '2px 0',
     fontSize: '13px',
     color: '#333',
+  },
+  itemTotal: {
+    margin: '8px 0 0',
+    fontSize: '13px',
+    fontWeight: 'bold',
+    color: '#4CAF50',
   },
   statusButtons: {
     marginTop: '8px',
