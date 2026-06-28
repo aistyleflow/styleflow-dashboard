@@ -47,15 +47,40 @@ function App() {
 
       setOrders(data || [])
 
-      // ✅ Fetch order items for each order
+      // ✅ FIXED: fetch order items separately without join
       const itemsMap = {}
       for (const order of (data || [])) {
-        const { data: items } = await supabase
+        const { data: items, error: itemsError } = await supabase
           .from('order_items')
-          .select('quantity, product_id, products(product_name, price)')
+          .select('quantity, product_id')
           .eq('order_id', order.id)
-        itemsMap[order.id] = items || []
+
+        if (itemsError) {
+          console.error("❌ order_items error:", itemsError.message)
+          itemsMap[order.id] = []
+          continue
+        }
+
+        // ✅ Fetch each product separately
+        const enrichedItems = []
+        for (const item of (items || [])) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('product_name, price')
+            .eq('id', item.product_id)
+            .maybeSingle()
+
+          enrichedItems.push({
+            quantity: item.quantity,
+            product_name: product?.product_name || 'Unknown Product',
+            price: product?.price || 0,
+          })
+        }
+
+        itemsMap[order.id] = enrichedItems
+        console.log(`✅ Order ${order.id} items:`, enrichedItems)
       }
+
       setOrderItems(itemsMap)
 
     } catch (err) {
@@ -219,24 +244,27 @@ function App() {
                   </div>
 
                   {/* ✅ Ordered Products */}
-                  {orderItems[order.id] && orderItems[order.id].length > 0 && (
+                  {orderItems[order.id] && orderItems[order.id].length > 0 ? (
                     <div style={styles.itemsList}>
                       <p style={styles.itemsTitle}>🛍️ Ordered Products:</p>
                       {orderItems[order.id].map((item, i) => {
-                        const name  = item.products?.product_name || 'Unknown'
-                        const price = item.products?.price || 0
-                        const total = price * item.quantity
+                        const total = item.price * item.quantity
                         return (
                           <p key={i} style={styles.itemRow}>
-                            • {name} × {item.quantity} = ₹{total}
+                            • {item.product_name} × {item.quantity} = ₹{total}
                           </p>
                         )
                       })}
                       <p style={styles.itemTotal}>
                         💰 Total: ₹{orderItems[order.id].reduce((sum, item) => {
-                          return sum + ((item.products?.price || 0) * item.quantity)
+                          return sum + (item.price * item.quantity)
                         }, 0)}
                       </p>
+                    </div>
+                  ) : (
+                    <div style={styles.itemsList}>
+                      <p style={styles.itemsTitle}>🛍️ Ordered Products:</p>
+                      <p style={styles.itemRow}>No product data available for this order.</p>
                     </div>
                   )}
 
@@ -446,6 +474,8 @@ const styles = {
     fontSize: '13px',
     fontWeight: 'bold',
     color: '#4CAF50',
+    borderTop: '1px solid #eee',
+    paddingTop: '6px',
   },
   statusButtons: {
     marginTop: '8px',
