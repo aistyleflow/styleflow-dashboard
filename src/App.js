@@ -47,7 +47,7 @@ function App() {
 
       setOrders(data || [])
 
-      // ✅ FIXED: fetch order items separately without join
+      // ✅ FIXED: no join — fetch order_items then products separately
       const itemsMap = {}
       for (const order of (data || [])) {
         const { data: items, error: itemsError } = await supabase
@@ -55,15 +55,13 @@ function App() {
           .select('quantity, product_id')
           .eq('order_id', order.id)
 
-        if (itemsError) {
-          console.error("❌ order_items error:", itemsError.message)
+        if (itemsError || !items || items.length === 0) {
           itemsMap[order.id] = []
           continue
         }
 
-        // ✅ Fetch each product separately
         const enrichedItems = []
-        for (const item of (items || [])) {
+        for (const item of items) {
           const { data: product } = await supabase
             .from('products')
             .select('product_name, price')
@@ -72,13 +70,12 @@ function App() {
 
           enrichedItems.push({
             quantity: item.quantity,
-            product_name: product?.product_name || 'Unknown Product',
+            product_name: product?.product_name || 'Unknown',
             price: product?.price || 0,
           })
         }
 
         itemsMap[order.id] = enrichedItems
-        console.log(`✅ Order ${order.id} items:`, enrichedItems)
       }
 
       setOrderItems(itemsMap)
@@ -264,7 +261,7 @@ function App() {
                   ) : (
                     <div style={styles.itemsList}>
                       <p style={styles.itemsTitle}>🛍️ Ordered Products:</p>
-                      <p style={styles.itemRow}>No product data available for this order.</p>
+                      <p style={styles.itemRow}>No product data for this order.</p>
                     </div>
                   )}
 
