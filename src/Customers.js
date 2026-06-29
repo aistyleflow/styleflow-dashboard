@@ -11,7 +11,6 @@ function Customers({ owner }) {
 
   useEffect(() => {
     if (owner?.id) fetchCustomers()
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [owner])
 
@@ -20,7 +19,6 @@ function Customers({ owner }) {
       setLoading(true)
       setError(null)
 
-      // ✅ Fetch ALL orders for this store — includes old + new orders
       const { data: orders, error } = await supabase
         .from('orders')
         .select('*')
@@ -29,7 +27,6 @@ function Customers({ owner }) {
 
       if (error) { setError(error.message); return }
 
-      // ✅ Group orders by phone_number to build CRM customer list
       const customerMap = {}
       ;(orders || []).forEach((order) => {
         const key = order.phone_number
@@ -48,13 +45,19 @@ function Customers({ owner }) {
         customerMap[key].total_orders += 1
         customerMap[key].total_spent += Number(order.total_amount || 0)
 
-        // ✅ Track latest order date
         if (
           !customerMap[key].last_order_date ||
           new Date(order.created_at) > new Date(customerMap[key].last_order_date)
         ) {
           customerMap[key].last_order_date = order.created_at
         }
+      })
+
+      // ✅ Fix 4: Sort each customer's orders by newest first
+      Object.values(customerMap).forEach((customer) => {
+        customer.orders.sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        )
       })
 
       const list = Object.values(customerMap).sort(
@@ -79,29 +82,29 @@ function Customers({ owner }) {
     }
   }
 
-  // ✅ Search filter
   let filtered = customers.filter((c) =>
     c.customer_name.toLowerCase().includes(search.toLowerCase()) ||
     c.phone_number.includes(search)
   )
 
-  // ✅ Sort/filter by selected filter
   if (filter === 'top') {
     filtered.sort((a, b) => b.total_spent - a.total_spent)
   }
 
+  // ✅ Fix 1: Recent Customers — use last_order_date instead of orders[0]
   if (filter === 'recent') {
     filtered.sort(
       (a, b) =>
-        new Date(b.orders[0]?.created_at || 0) -
-        new Date(a.orders[0]?.created_at || 0)
+        new Date(b.last_order_date || 0) -
+        new Date(a.last_order_date || 0)
     )
   }
 
+  // ✅ Fix 2: Inactive Customers — use last_order_date instead of orders[0]
   if (filter === 'inactive') {
     const today = new Date()
     filtered = filtered.filter((customer) => {
-      const lastOrder = new Date(customer.orders[0]?.created_at)
+      const lastOrder = new Date(customer.last_order_date)
       const diffDays = (today - lastOrder) / (1000 * 60 * 60 * 24)
       return diffDays > 30
     })
@@ -153,7 +156,10 @@ function Customers({ owner }) {
           {selectedCustomer.orders.map((order) => (
             <div key={order.id} style={styles.orderCard}>
               <div style={styles.orderRow}>
-                <span style={styles.orderId}>🆔 {order.id}</span>
+                {/* ✅ Fix 3: Use store_order_number instead of raw id */}
+                <span style={styles.orderId}>
+                  🆔 Order #{order.store_order_number || order.id}
+                </span>
                 <span style={{
                   ...styles.statusBadge,
                   backgroundColor: getStatusColor(order.status)
