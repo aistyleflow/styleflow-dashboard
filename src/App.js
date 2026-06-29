@@ -47,7 +47,6 @@ function App() {
 
       setOrders(data || [])
 
-      // ✅ fetch order_items then products separately
       const itemsMap = {}
       for (const order of (data || [])) {
         const { data: items, error: itemsError } = await supabase
@@ -87,14 +86,24 @@ function App() {
     }
   }
 
+  // ✅ UPDATED: updateStatus now calls backend to send WhatsApp notification
   async function updateStatus(orderId, newStatus) {
-    const { error } = await supabase
-      .from('orders')
-      .update({ status: newStatus })
-      .eq('id', orderId)
+    try {
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, newStatus })
+      })
 
-    if (error) return
-    fetchOrders(owner.id)
+      if (!response.ok) {
+        console.error("❌ Failed to update status")
+        return
+      }
+
+      fetchOrders(owner.id)
+    } catch (err) {
+      console.error("❌ updateStatus error:", err.message)
+    }
   }
 
   function getStatusColor(status) {
@@ -210,7 +219,6 @@ function App() {
 
                   <div style={styles.orderHeader}>
                     <div>
-                      {/* ✅ FIXED: removed duplicate #x, only show Order # */}
                       <p style={styles.orderId}>
                         🆔 Order #{order.store_order_number || order.id}
                       </p>
