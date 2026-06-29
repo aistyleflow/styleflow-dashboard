@@ -47,38 +47,36 @@ function App() {
 
       setOrders(data || [])
 
+      // 🚀 Load all order items at once
+      const orderIds = (data || []).map(order => order.id)
+
+      const { data: allItems } = await supabase
+        .from("order_items")
+        .select(`
+          order_id,
+          quantity,
+          products (
+            product_name,
+            price
+          )
+        `)
+        .in("order_id", orderIds)
+
       const itemsMap = {}
-      for (const order of (data || [])) {
-        const { data: items, error: itemsError } = await supabase
-          .from('order_items')
-          .select('quantity, product_id')
-          .eq('order_id', order.id)
 
-        if (itemsError || !items || items.length === 0) {
-          itemsMap[order.id] = []
-          continue
-        }
+      orderIds.forEach(id => {
+        itemsMap[id] = []
+      })
 
-        const enrichedItems = []
-        for (const item of items) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('product_name, price')
-            .eq('id', item.product_id)
-            .maybeSingle()
-
-          enrichedItems.push({
-            quantity: item.quantity,
-            product_name: product?.product_name || 'Unknown',
-            price: product?.price || 0,
-          })
-        }
-
-        itemsMap[order.id] = enrichedItems
-      }
+      ;(allItems || []).forEach(item => {
+        itemsMap[item.order_id].push({
+          quantity: item.quantity,
+          product_name: item.products?.product_name || "Unknown",
+          price: item.products?.price || 0
+        })
+      })
 
       setOrderItems(itemsMap)
-
     } catch (err) {
       setError(err.message)
     } finally {
@@ -89,7 +87,6 @@ function App() {
   // ✅ UPDATED: updateStatus now calls backend to send WhatsApp notification
   async function updateStatus(orderId, newStatus) {
     try {
-      console.log("Backend URL:", process.env.REACT_APP_BACKEND_URL)
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
