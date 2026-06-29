@@ -89,6 +89,7 @@ function App() {
   // ✅ UPDATED: updateStatus now calls backend to send WhatsApp notification
   async function updateStatus(orderId, newStatus) {
     try {
+      console.log(process.env.REACT_APP_BACKEND_URL)
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
