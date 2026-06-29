@@ -3,7 +3,6 @@ import { supabase } from './supabase.js'
 
 function Offers({ owner }) {
   const [pastOffers, setPastOffers] = useState([])
-  const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [result, setResult] = useState(null)
   const [customerCount, setCustomerCount] = useState(0)
@@ -18,7 +17,6 @@ function Offers({ owner }) {
   useEffect(() => {
     fetchPastOffers()
     fetchCustomerCount('all')
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -98,7 +96,6 @@ function Offers({ owner }) {
         message: `✅ Offer sent to ${data.sent} out of ${data.total} customers!`
       })
 
-      // ✅ Reset form
       setForm({
         title: '',
         description: '',
