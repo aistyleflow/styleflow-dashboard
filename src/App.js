@@ -47,7 +47,7 @@ function App() {
 
       setOrders(data || [])
 
-      // ✅ FIXED: no join — fetch order_items then products separately
+      // ✅ fetch order_items then products separately
       const itemsMap = {}
       for (const order of (data || [])) {
         const { data: items, error: itemsError } = await supabase
@@ -205,13 +205,14 @@ function App() {
 
           {!loading && !error && orders.length > 0 && (
             <div style={styles.ordersList}>
-              {orders.map((order, index) => (
+              {orders.map((order) => (
                 <div key={order.id} style={styles.orderCard}>
 
                   <div style={styles.orderHeader}>
                     <div>
+                      {/* ✅ FIXED: removed duplicate #x, only show Order # */}
                       <p style={styles.orderId}>
-                        #{index + 1} &nbsp;|&nbsp; 🆔 Order #{order.store_order_number || order.id}
+                        🆔 Order #{order.store_order_number || order.id}
                       </p>
                       <p style={styles.orderDate}>
                         🕐 {new Date(order.created_at).toLocaleString('en-IN', {
