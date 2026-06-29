@@ -4,6 +4,7 @@ import Login from './Login.js'
 import Products from './Products.js'
 import Settings from './Settings.js'
 import Customers from './Customers.js'
+import Offers from './Offers.js'
 
 function App() {
   const [orders, setOrders] = useState([])
@@ -47,36 +48,38 @@ function App() {
 
       setOrders(data || [])
 
-      // 🚀 Load all order items at once
-      const orderIds = (data || []).map(order => order.id)
-
-      const { data: allItems } = await supabase
-        .from("order_items")
-        .select(`
-          order_id,
-          quantity,
-          products (
-            product_name,
-            price
-          )
-        `)
-        .in("order_id", orderIds)
-
       const itemsMap = {}
+      for (const order of (data || [])) {
+        const { data: items, error: itemsError } = await supabase
+          .from('order_items')
+          .select('quantity, product_id')
+          .eq('order_id', order.id)
 
-      orderIds.forEach(id => {
-        itemsMap[id] = []
-      })
+        if (itemsError || !items || items.length === 0) {
+          itemsMap[order.id] = []
+          continue
+        }
 
-      ;(allItems || []).forEach(item => {
-        itemsMap[item.order_id].push({
-          quantity: item.quantity,
-          product_name: item.products?.product_name || "Unknown",
-          price: item.products?.price || 0
-        })
-      })
+        const enrichedItems = []
+        for (const item of items) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('product_name, price')
+            .eq('id', item.product_id)
+            .maybeSingle()
+
+          enrichedItems.push({
+            quantity: item.quantity,
+            product_name: product?.product_name || 'Unknown',
+            price: product?.price || 0,
+          })
+        }
+
+        itemsMap[order.id] = enrichedItems
+      }
 
       setOrderItems(itemsMap)
+
     } catch (err) {
       setError(err.message)
     } finally {
@@ -84,7 +87,6 @@ function App() {
     }
   }
 
-  // ✅ UPDATED: updateStatus now calls backend to send WhatsApp notification
   async function updateStatus(orderId, newStatus) {
     try {
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
@@ -146,12 +148,13 @@ function App() {
         </div>
       </div>
 
-      {/* ✅ Tab Bar */}
+      {/* ✅ Tab Bar — added Offers tab */}
       <div style={styles.tabBar}>
         {[
           { key: 'orders',    label: '📋 Orders'    },
           { key: 'products',  label: '📦 Products'  },
           { key: 'customers', label: '👥 Customers' },
+          { key: 'offers',    label: '🎁 Offers'    },
           { key: 'settings',  label: '⚙️ Settings'  },
         ].map((tab) => (
           <button
@@ -309,6 +312,11 @@ function App() {
       {/* ✅ Customers Tab */}
       {activeTab === 'customers' && (
         <Customers owner={owner} />
+      )}
+
+      {/* ✅ Offers Tab */}
+      {activeTab === 'offers' && (
+        <Offers owner={owner} />
       )}
 
       {/* ✅ Settings Tab */}
