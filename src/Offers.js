@@ -234,7 +234,7 @@ function Offers({ owner }) {
           <div style={styles.messagePreview}>
             <p style={styles.previewLabel}>👀 Message Preview:</p>
             <div style={styles.previewBubble}>
-              <p style={{ margin: '0 0 8px', fontWeight: 'bold' }}>🎁 Special Offer from StyleFlow!</p>
+              <p style={{ margin: '0 0 8px', fontWeight: 'bold' }}>🎁 Special Offer from {owner.shop_name}!</p>
               <p style={{ margin: '0 0 8px', fontWeight: 'bold' }}>{form.title}</p>
               <p style={{ margin: '0 0 8px' }}>{form.description}</p>
               {form.couponCode && (
