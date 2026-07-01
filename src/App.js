@@ -5,6 +5,7 @@ import Products from './Products.js'
 import Settings from './Settings.js'
 import Customers from './Customers.js'
 import Offers from './Offers.js'
+import PaymentSettings from './PaymentSettings.js'   // ✅ NEW
 
 function App() {
   const [orders, setOrders] = useState([])
@@ -148,14 +149,15 @@ function App() {
         </div>
       </div>
 
-      {/* ✅ Tab Bar — added Offers tab */}
+      {/* ✅ Tab Bar */}
       <div style={styles.tabBar}>
         {[
-          { key: 'orders',    label: '📋 Orders'    },
-          { key: 'products',  label: '📦 Products'  },
-          { key: 'customers', label: '👥 Customers' },
-          { key: 'offers',    label: '🎁 Offers'    },
-          { key: 'settings',  label: '⚙️ Settings'  },
+          { key: 'orders',          label: '📋 Orders'           },
+          { key: 'products',        label: '📦 Products'         },
+          { key: 'customers',       label: '👥 Customers'        },
+          { key: 'offers',          label: '🎁 Offers'           },
+          { key: 'paymentsettings', label: '💳 Payment Settings' }, // ✅ NEW
+          { key: 'settings',        label: '⚙️ Settings'         },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -319,6 +321,11 @@ function App() {
         <Offers owner={owner} />
       )}
 
+      {/* ✅ Payment Settings Tab — NEW */}
+      {activeTab === 'paymentsettings' && (
+        <PaymentSettings owner={owner} />
+      )}
+
       {/* ✅ Settings Tab */}
       {activeTab === 'settings' && (
         <Settings owner={owner} />
@@ -389,6 +396,7 @@ const styles = {
     display: 'flex',
     gap: '12px',
     marginBottom: '20px',
+    flexWrap: 'wrap',
   },
   tabBtn: {
     padding: '10px 24px',
