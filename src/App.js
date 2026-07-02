@@ -5,7 +5,7 @@ import Products from './Products.js'
 import Settings from './Settings.js'
 import Customers from './Customers.js'
 import Offers from './Offers.js'
-import PaymentSettings from './PaymentSettings.js'   // ✅ NEW
+import PaymentSettings from './PaymentSettings.js'
 
 function App() {
   const [orders, setOrders] = useState([])
@@ -156,7 +156,7 @@ function App() {
           { key: 'products',        label: '📦 Products'         },
           { key: 'customers',       label: '👥 Customers'        },
           { key: 'offers',          label: '🎁 Offers'           },
-          { key: 'paymentsettings', label: '💳 Payment Settings' }, // ✅ NEW
+          { key: 'paymentsettings', label: '💳 Payment Settings' },
           { key: 'settings',        label: '⚙️ Settings'         },
         ].map((tab) => (
           <button
@@ -252,6 +252,25 @@ function App() {
                     <p>📍 {order.customer_address || 'N/A'}</p>
                   </div>
 
+                  {/* ✅ Payment Details — NEW */}
+                  <div style={styles.paymentDetails}>
+                    <p>
+                      💳 <strong>Payment:</strong>{' '}
+                      {order.payment_method || 'N/A'}
+                      {' '}—{' '}
+                      <span style={{
+                        color: order.payment_status === 'paid' ? '#4CAF50'
+                          : order.payment_status === 'awaiting_verification' ? '#FF9800'
+                          : '#999',
+                        fontWeight: 'bold'
+                      }}>
+                        {order.payment_status
+                          ? order.payment_status.replace(/_/g, ' ').toUpperCase()
+                          : 'N/A'}
+                      </span>
+                    </p>
+                  </div>
+
                   {/* ✅ Ordered Products */}
                   {orderItems[order.id] && orderItems[order.id].length > 0 ? (
                     <div style={styles.itemsList}>
@@ -321,7 +340,7 @@ function App() {
         <Offers owner={owner} />
       )}
 
-      {/* ✅ Payment Settings Tab — NEW */}
+      {/* ✅ Payment Settings Tab */}
       {activeTab === 'paymentsettings' && (
         <PaymentSettings owner={owner} />
       )}
@@ -471,6 +490,15 @@ const styles = {
     padding: '12px 0',
     marginBottom: '12px',
     lineHeight: '1.8',
+  },
+  // ✅ NEW
+  paymentDetails: {
+    backgroundColor: '#f0f4ff',
+    borderRadius: '8px',
+    padding: '10px 14px',
+    marginBottom: '12px',
+    fontSize: '13px',
+    color: '#333',
   },
   itemsList: {
     backgroundColor: '#f9f9f9',
