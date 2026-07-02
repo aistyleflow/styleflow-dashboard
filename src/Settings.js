@@ -10,17 +10,21 @@ function Settings({ owner }) {
     instagram: '',
     description: ''
   })
-  // ✅ 1. Store code state
   const [storeCode, setStoreCode] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState(null)
 
+  // ✅ WhatsApp usage state
+  const [usage, setUsage] = useState(null)
+  const [usageLoading, setUsageLoading] = useState(true)
+
   const storeId = owner.id
 
   useEffect(() => {
     fetchSettings()
+    fetchUsage()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -48,7 +52,6 @@ function Settings({ owner }) {
           instagram:    data.instagram    || '',
           description:  data.description  || ''
         })
-        // ✅ 2. Load store code from Supabase
         setStoreCode(data.store_code || '')
       }
 
@@ -57,6 +60,48 @@ function Settings({ owner }) {
     } finally {
       setLoading(false)
     }
+  }
+
+  // ✅ Fetch WhatsApp usage for this store
+  async function fetchUsage() {
+    try {
+      setUsageLoading(true)
+
+      const { data, error } = await supabase
+        .from('store_message_usage')
+        .select('*')
+        .eq('store_id', storeId)
+        .maybeSingle()
+
+      if (error) {
+        console.error('❌ Usage fetch error:', error.message)
+        return
+      }
+
+      setUsage(data || null)
+      console.log('✅ Usage fetched:', data)
+
+    } catch (err) {
+      console.error('❌ Usage fetch exception:', err.message)
+    } finally {
+      setUsageLoading(false)
+    }
+  }
+
+  // ✅ Format date for usage display
+  function formatUsageDate(dateString) {
+    if (!dateString) return 'N/A'
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'N/A'
+    return date.toLocaleString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    })
   }
 
   function handleChange(e) {
@@ -69,7 +114,6 @@ function Settings({ owner }) {
       setError(null)
       setSuccess(false)
 
-      // ✅ 4. Validation
       const cleanStoreCode = storeCode.trim().toUpperCase()
 
       if (!cleanStoreCode) {
@@ -84,7 +128,6 @@ function Settings({ owner }) {
         return
       }
 
-      // ✅ 5. Uniqueness check — exclude current store
       const { data: existing, error: checkError } = await supabase
         .from('shop_owners')
         .select('id')
@@ -104,7 +147,6 @@ function Settings({ owner }) {
         return
       }
 
-      // ✅ 6. Save to shop_owners including store_code
       const { error: saveError } = await supabase
         .from('shop_owners')
         .update({
@@ -161,6 +203,61 @@ function Settings({ owner }) {
         </div>
       )}
 
+      {/* ✅ WhatsApp Usage Card */}
+      <div style={styles.usageCard}>
+        <div style={styles.usageHeader}>
+          <h3 style={styles.usageTitle}>📊 WhatsApp Usage</h3>
+          <button
+            style={styles.refreshUsageBtn}
+            onClick={fetchUsage}
+            disabled={usageLoading}
+          >
+            {usageLoading ? '⏳' : '🔄 Refresh'}
+          </button>
+        </div>
+
+        {usageLoading ? (
+          <p style={styles.usageLoadingText}>⏳ Loading usage data...</p>
+        ) : usage ? (
+          <div style={styles.usageGrid}>
+            <div style={styles.usageStat}>
+              <span style={{ ...styles.usageNumber, color: '#2196F3' }}>
+                {usage.incoming_count || 0}
+              </span>
+              <span style={styles.usageLabel}>📥 Incoming</span>
+            </div>
+            <div style={styles.usageStat}>
+              <span style={{ ...styles.usageNumber, color: '#4CAF50' }}>
+                {usage.outgoing_count || 0}
+              </span>
+              <span style={styles.usageLabel}>📤 Outgoing</span>
+            </div>
+            <div style={styles.usageStat}>
+              <span style={{ ...styles.usageNumber, color: '#9C27B0' }}>
+                {usage.total_count || 0}
+              </span>
+              <span style={styles.usageLabel}>💬 Total</span>
+            </div>
+            <div style={styles.usageStatWide}>
+              <span style={styles.usageLastLabel}>🕐 Last Message</span>
+              <span style={styles.usageLastValue}>
+                {formatUsageDate(usage.last_message_at)}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div style={styles.usageEmpty}>
+            <p style={styles.usageEmptyText}>
+              📭 No usage data yet.
+            </p>
+            <p style={styles.usageEmptySubText}>
+              Data will appear here once customers start messaging your store.
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Settings Form */}
       <div style={styles.formBox}>
 
         {/* Store Name */}
@@ -241,7 +338,7 @@ function Settings({ owner }) {
           />
         </div>
 
-        {/* ✅ 3. Store Code input */}
+        {/* Store Code */}
         <div style={styles.formField}>
           <label style={styles.label}>🔑 Store Code</label>
           <input
@@ -319,6 +416,98 @@ const styles = {
     color: '#c62828',
     fontSize: '14px',
     textAlign: 'center',
+  },
+  // ✅ Usage card styles
+  usageCard: {
+    backgroundColor: '#fff',
+    borderRadius: '12px',
+    padding: '20px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    marginBottom: '20px',
+  },
+  usageHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px',
+  },
+  usageTitle: {
+    margin: 0,
+    fontSize: '18px',
+    color: '#333',
+  },
+  refreshUsageBtn: {
+    padding: '6px 14px',
+    backgroundColor: '#f0f0f0',
+    color: '#333',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: 'bold',
+  },
+  usageLoadingText: {
+    margin: 0,
+    color: '#999',
+    fontSize: '14px',
+    textAlign: 'center',
+    padding: '20px 0',
+  },
+  usageGrid: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr 1fr',
+    gap: '12px',
+  },
+  usageStat: {
+    backgroundColor: '#f9f9f9',
+    borderRadius: '10px',
+    padding: '16px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  usageNumber: {
+    fontSize: '28px',
+    fontWeight: 'bold',
+  },
+  usageLabel: {
+    fontSize: '12px',
+    color: '#999',
+    fontWeight: 'bold',
+  },
+  usageStatWide: {
+    gridColumn: '1 / -1',
+    backgroundColor: '#f9f9f9',
+    borderRadius: '10px',
+    padding: '14px 16px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  usageLastLabel: {
+    fontSize: '13px',
+    color: '#666',
+    fontWeight: 'bold',
+  },
+  usageLastValue: {
+    fontSize: '13px',
+    color: '#333',
+    fontWeight: 'bold',
+  },
+  usageEmpty: {
+    textAlign: 'center',
+    padding: '20px 0',
+  },
+  usageEmptyText: {
+    margin: '0 0 6px',
+    fontSize: '15px',
+    color: '#666',
+  },
+  usageEmptySubText: {
+    margin: 0,
+    fontSize: '13px',
+    color: '#999',
   },
   formBox: {
     backgroundColor: '#fff',
