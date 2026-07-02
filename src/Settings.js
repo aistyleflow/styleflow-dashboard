@@ -10,14 +10,17 @@ function Settings({ owner }) {
     instagram: '',
     description: ''
   })
+  // ✅ 1. Store code state
+  const [storeCode, setStoreCode] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState(null)
 
+  const storeId = owner.id
+
   useEffect(() => {
     fetchSettings()
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -28,7 +31,7 @@ function Settings({ owner }) {
       const { data, error } = await supabase
         .from('shop_owners')
         .select('*')
-        .eq('id', owner.id)
+        .eq('id', storeId)
         .maybeSingle()
 
       if (error) {
@@ -45,6 +48,8 @@ function Settings({ owner }) {
           instagram:    data.instagram    || '',
           description:  data.description  || ''
         })
+        // ✅ 2. Load store code from Supabase
+        setStoreCode(data.store_code || '')
       }
 
     } catch (err) {
@@ -64,24 +69,62 @@ function Settings({ owner }) {
       setError(null)
       setSuccess(false)
 
-      const { error } = await supabase
+      // ✅ 4. Validation
+      const cleanStoreCode = storeCode.trim().toUpperCase()
+
+      if (!cleanStoreCode) {
+        setError('Store code cannot be empty')
+        setSaving(false)
+        return
+      }
+
+      if (!/^[A-Z0-9_]+$/.test(cleanStoreCode)) {
+        setError('Store code can only contain letters, numbers, and underscores (e.g. ROYALWEAR)')
+        setSaving(false)
+        return
+      }
+
+      // ✅ 5. Uniqueness check — exclude current store
+      const { data: existing, error: checkError } = await supabase
+        .from('shop_owners')
+        .select('id')
+        .eq('store_code', cleanStoreCode)
+        .neq('id', storeId)
+        .maybeSingle()
+
+      if (checkError) {
+        setError(checkError.message)
+        setSaving(false)
+        return
+      }
+
+      if (existing) {
+        setError(`Store code "${cleanStoreCode}" is already taken. Please choose a different one.`)
+        setSaving(false)
+        return
+      }
+
+      // ✅ 6. Save to shop_owners including store_code
+      const { error: saveError } = await supabase
         .from('shop_owners')
         .update({
           shop_name:   form.shop_name,
           owner_name:  form.owner_name,
           address:     form.address,
           instagram:   form.instagram,
-          description: form.description
+          description: form.description,
+          store_code:  cleanStoreCode
         })
-        .eq('id', owner.id)
+        .eq('id', storeId)
 
-      if (error) {
-        setError(error.message)
+      if (saveError) {
+        setError(saveError.message)
         return
       }
 
+      setStoreCode(cleanStoreCode)
       setSuccess(true)
-      console.log('✅ Settings saved')
+      console.log('✅ Settings saved — store code:', cleanStoreCode)
       setTimeout(() => setSuccess(false), 3000)
 
     } catch (err) {
@@ -198,6 +241,29 @@ function Settings({ owner }) {
           />
         </div>
 
+        {/* ✅ 3. Store Code input */}
+        <div style={styles.formField}>
+          <label style={styles.label}>🔑 Store Code</label>
+          <input
+            style={styles.input}
+            type="text"
+            placeholder="e.g. ROYALWEAR"
+            value={storeCode}
+            onChange={(e) => setStoreCode(e.target.value.toUpperCase())}
+          />
+          <p style={styles.hint}>
+            Customers will type this code to access your store on WhatsApp.
+            Only letters, numbers, underscores allowed. (e.g. ROYALWEAR, TRENDZ, JIO_OIL)
+          </p>
+          {storeCode && (
+            <div style={styles.storeCodePreview}>
+              <p style={styles.storeCodePreviewText}>
+                👋 Customer types: <strong>{storeCode.trim().toUpperCase()}</strong>
+              </p>
+            </div>
+          )}
+        </div>
+
         {/* Save Button */}
         <button
           style={{
@@ -295,6 +361,17 @@ const styles = {
     margin: '4px 0 0',
     fontSize: '12px',
     color: '#999',
+  },
+  storeCodePreview: {
+    backgroundColor: '#e3f2fd',
+    borderRadius: '8px',
+    padding: '10px 14px',
+    marginTop: '4px',
+  },
+  storeCodePreviewText: {
+    margin: 0,
+    fontSize: '13px',
+    color: '#1565c0',
   },
   saveBtn: {
     padding: '14px',
