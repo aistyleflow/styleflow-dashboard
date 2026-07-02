@@ -14,6 +14,7 @@ function App() {
   const [error, setError] = useState(null)
   const [owner, setOwner] = useState(null)
   const [activeTab, setActiveTab] = useState('orders')
+  const [verifying, setVerifying] = useState({})  // ✅ NEW — track verify loading per order
 
   function handleLoginSuccess(ownerData) {
     console.log("✅ Login success — store_id:", ownerData.id)
@@ -104,6 +105,41 @@ function App() {
       fetchOrders(owner.id)
     } catch (err) {
       console.error("❌ updateStatus error:", err.message)
+    }
+  }
+
+  // ✅ NEW — Verify UPI payment
+  async function verifyPayment(orderId) {
+    try {
+      setVerifying(prev => ({ ...prev, [orderId]: true }))
+
+      // ✅ Update payment_status to paid + order status to confirmed
+      const { error } = await supabase
+        .from('orders')
+        .update({
+          payment_status: 'paid',
+          status: 'confirmed'
+        })
+        .eq('id', orderId)
+
+      if (error) {
+        console.error("❌ Verify payment error:", error.message)
+        return
+      }
+
+      // ✅ Also send WhatsApp notification via backend
+      await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, newStatus: 'confirmed' })
+      })
+
+      fetchOrders(owner.id)
+
+    } catch (err) {
+      console.error("❌ verifyPayment error:", err.message)
+    } finally {
+      setVerifying(prev => ({ ...prev, [orderId]: false }))
     }
   }
 
@@ -252,7 +288,7 @@ function App() {
                     <p>📍 {order.customer_address || 'N/A'}</p>
                   </div>
 
-                  {/* ✅ Payment Details — NEW */}
+                  {/* ✅ Payment Details */}
                   <div style={styles.paymentDetails}>
                     <p>
                       💳 <strong>Payment:</strong>{' '}
@@ -269,6 +305,21 @@ function App() {
                           : 'N/A'}
                       </span>
                     </p>
+
+                    {/* ✅ NEW — Verify Payment button for UPI pending orders */}
+                    {order.payment_method === 'UPI' &&
+                     order.payment_status === 'awaiting_verification' && (
+                      <button
+                        style={{
+                          ...styles.verifyBtn,
+                          opacity: verifying[order.id] ? 0.7 : 1,
+                        }}
+                        onClick={() => verifyPayment(order.id)}
+                        disabled={verifying[order.id]}
+                      >
+                        {verifying[order.id] ? '⏳ Verifying...' : '✅ Verify Payment'}
+                      </button>
+                    )}
                   </div>
 
                   {/* ✅ Ordered Products */}
@@ -491,7 +542,6 @@ const styles = {
     marginBottom: '12px',
     lineHeight: '1.8',
   },
-  // ✅ NEW
   paymentDetails: {
     backgroundColor: '#f0f4ff',
     borderRadius: '8px',
@@ -499,6 +549,18 @@ const styles = {
     marginBottom: '12px',
     fontSize: '13px',
     color: '#333',
+  },
+  // ✅ NEW
+  verifyBtn: {
+    marginTop: '10px',
+    padding: '8px 16px',
+    backgroundColor: '#4CAF50',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: 'bold',
   },
   itemsList: {
     backgroundColor: '#f9f9f9',
