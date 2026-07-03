@@ -6,6 +6,8 @@ function PaymentSettings({ owner }) {
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [result, setResult] = useState(null)
+  const [qrFile, setQrFile] = useState(null)      // ✅ NEW — store selected QR file
+  const [qrPreview, setQrPreview] = useState(null) // ✅ NEW — local preview before upload
   const [form, setForm] = useState({
     cod_enabled: true,
     upi_enabled: false,
@@ -48,13 +50,23 @@ function PaymentSettings({ owner }) {
     }
   }
 
-  async function handleQRUpload(e) {
+  // ✅ FIXED — only store file in state, show local preview, don't upload yet
+  function handleQRFileSelect(e) {
     const file = e.target.files[0]
     if (!file) return
 
+    setQrFile(file)
+
+    // ✅ Show local preview immediately
+    const localUrl = URL.createObjectURL(file)
+    setQrPreview(localUrl)
+    setResult(null)
+  }
+
+  // ✅ FIXED — upload QR to Supabase Storage and return public URL
+  async function uploadQRToStorage(file) {
     try {
       setUploading(true)
-      setResult(null)
 
       const fileExt = file.name.split('.').pop()
       const fileName = `qr_${owner.id}_${Date.now()}.${fileExt}`
@@ -64,28 +76,53 @@ function PaymentSettings({ owner }) {
         .upload(fileName, file, { upsert: true })
 
       if (uploadError) {
-        setResult({ type: 'error', message: `❌ Upload failed: ${uploadError.message}` })
-        return
+        console.error("❌ QR upload error:", uploadError.message)
+        return null
       }
 
       const { data: urlData } = supabase.storage
         .from('qr-codes')
         .getPublicUrl(fileName)
 
-      setForm(prev => ({ ...prev, qr_code_url: urlData.publicUrl }))
-      setResult({ type: 'success', message: '✅ QR Code uploaded successfully!' })
+      console.log("✅ QR uploaded — URL:", urlData.publicUrl)
+      return urlData.publicUrl
 
     } catch (err) {
-      setResult({ type: 'error', message: `❌ Upload error: ${err.message}` })
+      console.error("❌ uploadQRToStorage error:", err.message)
+      return null
     } finally {
       setUploading(false)
     }
   }
 
+  // ✅ FIXED — Save function handles QR upload if file selected
   async function handleSave() {
     try {
       setSaving(true)
       setResult(null)
+
+      let finalQrUrl = form.qr_code_url // ✅ Keep existing URL by default
+
+      // ✅ If new QR file selected — upload it first
+      if (qrFile) {
+        const uploadedUrl = await uploadQRToStorage(qrFile)
+        if (uploadedUrl) {
+          finalQrUrl = uploadedUrl
+          console.log("✅ Using new QR URL:", finalQrUrl)
+        } else {
+          setResult({ type: 'error', message: '❌ QR upload failed. Please try again.' })
+          setSaving(false)
+          return
+        }
+      }
+
+      // ✅ Build settings object with correct qr_code_url
+      const settingsToSave = {
+        ...form,
+        qr_code_url: finalQrUrl,  // ✅ new upload URL or existing URL — never null
+      }
+
+      console.log("💾 Saving payment settings:", JSON.stringify(settingsToSave))
 
       const { data: existing } = await supabase
         .from('store_payment_settings')
@@ -97,7 +134,7 @@ function PaymentSettings({ owner }) {
         const { error } = await supabase
           .from('store_payment_settings')
           .update({
-            ...form,
+            ...settingsToSave,
             updated_at: new Date().toISOString()
           })
           .eq('store_id', owner.id)
@@ -111,7 +148,7 @@ function PaymentSettings({ owner }) {
           .from('store_payment_settings')
           .insert({
             store_id: owner.id,
-            ...form,
+            ...settingsToSave,
           })
 
         if (error) {
@@ -120,7 +157,13 @@ function PaymentSettings({ owner }) {
         }
       }
 
+      // ✅ Update form with new QR URL + clear file state
+      setForm(prev => ({ ...prev, qr_code_url: finalQrUrl }))
+      setQrFile(null)
+      setQrPreview(null)
+
       setResult({ type: 'success', message: '✅ Payment settings saved successfully!' })
+      console.log("✅ Payment settings saved — qr_code_url:", finalQrUrl)
 
     } catch (err) {
       setResult({ type: 'error', message: `❌ Error: ${err.message}` })
@@ -233,22 +276,40 @@ function PaymentSettings({ owner }) {
               />
             </div>
 
+            {/* ✅ FIXED QR Upload Section */}
             <div style={styles.formField}>
               <label style={styles.label}>🖼️ QR Code</label>
               <input
                 style={styles.fileInput}
                 type="file"
                 accept="image/*"
-                onChange={handleQRUpload}
-                disabled={uploading}
+                onChange={handleQRFileSelect}
               />
-              {uploading && <p style={styles.hint}>⏳ Uploading QR code...</p>}
-              {form.qr_code_url && !uploading && (
+              <p style={styles.hint}>
+                Select a QR image and click Save to upload it.
+              </p>
+
+              {/* ✅ Show local preview of newly selected file */}
+              {qrPreview && (
                 <div style={styles.qrPreview}>
-                  <p style={styles.hint}>✅ QR Code uploaded:</p>
+                  <p style={{ ...styles.hint, color: '#FF9800' }}>
+                    🔄 New QR selected (not saved yet — click Save below)
+                  </p>
+                  <img
+                    src={qrPreview}
+                    alt="New QR Code Preview"
+                    style={styles.qrImage}
+                  />
+                </div>
+              )}
+
+              {/* ✅ Show existing saved QR if no new file selected */}
+              {!qrPreview && form.qr_code_url && (
+                <div style={styles.qrPreview}>
+                  <p style={{ ...styles.hint, color: '#4CAF50' }}>✅ Current saved QR Code:</p>
                   <img
                     src={form.qr_code_url}
-                    alt="QR Code"
+                    alt="Saved QR Code"
                     style={styles.qrImage}
                   />
                 </div>
@@ -295,7 +356,7 @@ function PaymentSettings({ owner }) {
 
         <textarea
           style={styles.textarea}
-          placeholder="e.g. Please complete payment within 24 hours. For any issues contact us at support@yourstore.com"
+          placeholder="e.g. Please complete payment within 24 hours."
           value={form.payment_instructions}
           onChange={(e) => setForm(prev => ({ ...prev, payment_instructions: e.target.value }))}
           rows={4}
@@ -306,12 +367,12 @@ function PaymentSettings({ owner }) {
       <button
         style={{
           ...styles.saveBtn,
-          opacity: saving ? 0.7 : 1,
+          opacity: saving || uploading ? 0.7 : 1,
         }}
         onClick={handleSave}
-        disabled={saving}
+        disabled={saving || uploading}
       >
-        {saving ? '⏳ Saving...' : '💾 Save Payment Settings'}
+        {uploading ? '⏳ Uploading QR...' : saving ? '⏳ Saving...' : '💾 Save Payment Settings'}
       </button>
 
     </div>
