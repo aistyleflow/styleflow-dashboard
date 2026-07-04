@@ -43,7 +43,13 @@ function Customers({ owner }) {
         }
         customerMap[key].orders.push(order)
         customerMap[key].total_orders += 1
-        customerMap[key].total_spent += Number(order.total_amount || 0)
+
+        // ✅ STEP 1 FIXED — only count delivered orders, try all amount fields
+        if ((order.status || '').toLowerCase() === 'delivered') {
+          customerMap[key].total_spent += Number(
+            order.payment_amount || order.total_amount || order.order_total || order.total || 0
+          )
+        }
 
         if (
           !customerMap[key].last_order_date ||
@@ -130,6 +136,7 @@ function Customers({ owner }) {
               <span style={styles.modalStatLabel}>Total Orders</span>
             </div>
             <div style={styles.modalStatCard}>
+              {/* ✅ STEP 3 — left as is, now correct after Step 1 fix */}
               <span style={{ ...styles.modalStatNum, color: '#4CAF50' }}>
                 ₹{Number(selectedCustomer.total_spent).toLocaleString('en-IN')}
               </span>
@@ -174,9 +181,12 @@ function Customers({ owner }) {
                   hour: '2-digit', minute: '2-digit', hour12: true,
                 })}
               </p>
-              {order.total_amount && (
+              {/* ✅ STEP 2 FIXED — check all amount fields */}
+              {Number(order.payment_amount || order.total_amount || order.order_total || order.total || 0) > 0 && (
                 <p style={styles.orderAmount}>
-                  💰 ₹{Number(order.total_amount).toLocaleString('en-IN')}
+                  💰 ₹{Number(
+                    order.payment_amount || order.total_amount || order.order_total || order.total || 0
+                  ).toLocaleString('en-IN')}
                 </p>
               )}
             </div>
