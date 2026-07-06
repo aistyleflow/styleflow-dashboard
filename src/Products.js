@@ -1,12 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from './supabase.js'
 
 function Products({ owner }) {
   const [products, setProducts] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(false)
   const [showForm, setShowForm] = useState(false)
   const [editProduct, setEditProduct] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [imageFile, setImageFile] = useState(null)      // ✅ STEP 2
+  const [uploading, setUploading] = useState(false)     // ✅ STEP 2
   const [form, setForm] = useState({
     product_name: '',
     price: '',
@@ -18,42 +20,79 @@ function Products({ owner }) {
   })
 
   useEffect(() => {
-    fetchProducts()
-
+    if (owner?.id) fetchProducts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [owner])
 
-  async function fetchProducts() {
+  const fetchProducts = async () => {
     try {
       setLoading(true)
-      setError(null)
-
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .eq('store_id', owner.id)
+        .eq('store_id', Number(owner.id))
         .order('id', { ascending: false })
 
-      if (error) {
-        setError(error.message)
-        return
-      }
-
-      setProducts(data)
-
+      if (error) { console.error('❌ fetchProducts error:', error.message); return }
+      setProducts(data || [])
     } catch (err) {
-      setError(err.message)
+      console.error('❌ fetchProducts error:', err.message)
     } finally {
       setLoading(false)
     }
   }
 
   function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value })
+    const { name, value } = e.target
+    setForm(prev => ({ ...prev, [name]: value }))
   }
 
+  // ✅ STEP 3 — file picker handler
+  function handleImageChange(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImageFile(file)
+  }
+
+  // ✅ STEP 4 — upload function
+  async function uploadProductImage() {
+    if (!imageFile) return form.image_url || ''
+
+    try {
+      setUploading(true)
+
+      const fileExt = imageFile.name.split('.').pop()
+      const fileName = `${owner.id}-${Date.now()}.${fileExt}`
+      const filePath = `products/${fileName}`
+
+      const { error: uploadError } = await supabase.storage
+        .from('product-images')
+        .upload(filePath, imageFile)
+
+      if (uploadError) {
+        console.error('Upload error:', uploadError.message)
+        alert('Image upload failed')
+        return ''
+      }
+
+      const { data } = supabase.storage
+        .from('product-images')
+        .getPublicUrl(filePath)
+
+      return data.publicUrl
+    } catch (err) {
+      console.error(err)
+      alert('Image upload failed')
+      return ''
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  // ✅ STEP 6 — reset imageFile when Add opens
   function handleAddClick() {
     setEditProduct(null)
+    setImageFile(null)
     setForm({
       product_name: '',
       price: '',
@@ -66,12 +105,14 @@ function Products({ owner }) {
     setShowForm(true)
   }
 
+  // ✅ STEP 7 — reset imageFile when Edit opens
   function handleEditClick(product) {
     setEditProduct(product)
+    setImageFile(null)
     setForm({
-      product_name: product.product_name,
-      price: product.price,
-      stock: product.stock,
+      product_name: product.product_name || '',
+      price: product.price || '',
+      stock: product.stock || '',
       size: product.size || '',
       color: product.color || '',
       category: product.category || '',
@@ -80,22 +121,39 @@ function Products({ owner }) {
     setShowForm(true)
   }
 
+  function handleCancel() {
+    setShowForm(false)
+    setEditProduct(null)
+    setImageFile(null)
+  }
+
+  // ✅ STEP 5 — handleSave with image upload
   async function handleSave() {
     try {
-      if (!form.product_name || !form.price || !form.stock) {
-        alert('Please fill Name, Price and Stock')
+      setSaving(true)
+
+      if (!form.product_name.trim()) {
+        alert('Product name is required')
         return
       }
 
+      // ✅ Upload image first if file selected
+      let finalImageUrl = form.image_url
+
+      if (imageFile) {
+        finalImageUrl = await uploadProductImage()
+        if (!finalImageUrl) return
+      }
+
       const productData = {
-        product_name: form.product_name,
-        price: Number(form.price),
-        stock: Number(form.stock),
-        size: form.size,
-        color: form.color,
-        category: form.category,
-        image_url: form.image_url,
-        store_id: owner.id
+        product_name: form.product_name.trim(),
+        price: Number(form.price) || 0,
+        stock: Number(form.stock) || 0,
+        size: form.size.trim(),
+        color: form.color.trim(),
+        category: form.category.trim(),
+        image_url: finalImageUrl,   // ✅ use finalImageUrl not form.image_url
+        store_id: Number(owner.id),
       }
 
       if (editProduct) {
@@ -104,55 +162,37 @@ function Products({ owner }) {
           .update(productData)
           .eq('id', editProduct.id)
 
-        if (error) {
-          alert('Could not update product. Try again!')
-          return
-        }
-
-        console.log('✅ Product updated:', form.product_name)
-
+        if (error) { console.error('❌ Update error:', error.message); return }
       } else {
         const { error } = await supabase
           .from('products')
           .insert(productData)
 
-        if (error) {
-          alert('Could not add product. Try again!')
-          return
-        }
-
-        console.log('✅ Product added:', form.product_name)
+        if (error) { console.error('❌ Insert error:', error.message); return }
       }
 
       setShowForm(false)
+      setEditProduct(null)
+      setImageFile(null)
       fetchProducts()
 
     } catch (err) {
-      console.error('❌ Save error:', err.message)
+      console.error('❌ handleSave error:', err.message)
+    } finally {
+      setSaving(false)
     }
   }
 
-  async function handleDelete(productId, productName) {
-    if (!window.confirm(`Delete "${productName}"?`)) return
+  async function handleDelete(productId) {
+    if (!window.confirm('Delete this product?')) return
 
     const { error } = await supabase
       .from('products')
       .delete()
       .eq('id', productId)
 
-    if (error) {
-      alert('Could not delete product. Try again!')
-      return
-    }
-
-    console.log('✅ Product deleted:', productId)
+    if (error) { console.error('❌ Delete error:', error.message); return }
     fetchProducts()
-  }
-
-  // ✅ Parse sizes
-  function getSizes(sizeString) {
-    if (!sizeString) return []
-    return sizeString.split(',').map(s => s.trim()).filter(s => s)
   }
 
   return (
@@ -160,28 +200,31 @@ function Products({ owner }) {
 
       {/* Header */}
       <div style={styles.header}>
-        <h2 style={styles.title}>📦 Products</h2>
+        <div>
+          <h2 style={styles.title}>📦 Products</h2>
+          <p style={styles.subtitle}>{products.length} product{products.length !== 1 ? 's' : ''} in your store</p>
+        </div>
         <button style={styles.addBtn} onClick={handleAddClick}>
           ➕ Add Product
         </button>
       </div>
 
-      {/* Add/Edit Form */}
+      {/* Form */}
       {showForm && (
-        <div style={styles.formBox}>
+        <div style={styles.formCard}>
           <h3 style={styles.formTitle}>
             {editProduct ? '✏️ Edit Product' : '➕ Add New Product'}
           </h3>
 
+          {/* Form fields grid — all except image_url */}
           <div style={styles.formGrid}>
             {[
-              { label: 'Product Name *', name: 'product_name', type: 'text',   placeholder: 'e.g. Black Hoodie' },
-              { label: 'Price (₹) *',    name: 'price',        type: 'number', placeholder: 'e.g. 999' },
-              { label: 'Stock *',        name: 'stock',        type: 'number', placeholder: 'e.g. 50' },
-              { label: 'Size',           name: 'size',         type: 'text',   placeholder: 'e.g. S, M, L, XL, XXL' },
-              { label: 'Color',          name: 'color',        type: 'text',   placeholder: 'e.g. Black' },
-              { label: 'Category',       name: 'category',     type: 'text',   placeholder: 'e.g. T-Shirts' },
-              { label: 'Image URL',      name: 'image_url',    type: 'text',   placeholder: 'https://...' },
+              { label: 'Product Name *', name: 'product_name', type: 'text',   placeholder: 'e.g. Black Baggy Pant' },
+              { label: 'Price (₹)',      name: 'price',        type: 'number', placeholder: 'e.g. 1599'             },
+              { label: 'Stock',          name: 'stock',        type: 'number', placeholder: 'e.g. 50'               },
+              { label: 'Sizes',          name: 'size',         type: 'text',   placeholder: 'e.g. S,M,L,XL'         },
+              { label: 'Color',          name: 'color',        type: 'text',   placeholder: 'e.g. Black'             },
+              { label: 'Category',       name: 'category',     type: 'text',   placeholder: 'e.g. Pants'             },
             ].map((field) => (
               <div key={field.name} style={styles.formField}>
                 <label style={styles.label}>{field.label}</label>
@@ -197,12 +240,54 @@ function Products({ owner }) {
             ))}
           </div>
 
-          <div style={styles.formActions}>
-            <button style={styles.saveBtn} onClick={handleSave}>
-              {editProduct ? '✅ Update Product' : '✅ Save Product'}
+          {/* ✅ STEP 8 — file upload instead of URL input */}
+          <div style={styles.formField}>
+            <label style={styles.label}>Product Image</label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleImageChange}
+              style={styles.fileInput}
+            />
+          </div>
+
+          {/* ✅ STEP 9 — image preview */}
+          {(imageFile || form.image_url) && (
+            <div style={{ marginTop: '12px' }}>
+              <img
+                src={imageFile ? URL.createObjectURL(imageFile) : form.image_url}
+                alt="Preview"
+                style={{
+                  width: '120px',
+                  height: '120px',
+                  objectFit: 'cover',
+                  borderRadius: '8px',
+                  border: '1px solid #ddd'
+                }}
+              />
+            </div>
+          )}
+
+          <div style={styles.formButtons}>
+            <button style={styles.cancelBtn} onClick={handleCancel}>
+              Cancel
             </button>
-            <button style={styles.cancelBtn} onClick={() => setShowForm(false)}>
-              ❌ Cancel
+            {/* ✅ STEP 10 — save button shows upload state */}
+            <button
+              style={{
+                ...styles.saveBtn,
+                opacity: saving || uploading ? 0.7 : 1
+              }}
+              onClick={handleSave}
+              disabled={saving || uploading}
+            >
+              {uploading
+                ? '⏳ Uploading image...'
+                : saving
+                  ? '⏳ Saving...'
+                  : editProduct
+                    ? '✅ Update Product'
+                    : '✅ Save Product'}
             </button>
           </div>
         </div>
@@ -215,73 +300,39 @@ function Products({ owner }) {
         </div>
       )}
 
-      {/* Error */}
-      {error && (
-        <div style={styles.errorBox}>
-          <p>❌ Error: {error}</p>
-          <button style={styles.retryBtn} onClick={fetchProducts}>Retry</button>
-        </div>
-      )}
-
       {/* Empty */}
-      {!loading && !error && products.length === 0 && (
+      {!loading && products.length === 0 && !showForm && (
         <div style={styles.center}>
           <p style={styles.emptyText}>📭 No products yet.</p>
-          <p style={styles.emptySubText}>
-            Click "Add Product" to add your first product.
-          </p>
+          <p style={styles.emptySubText}>Click Add Product to get started!</p>
         </div>
       )}
 
-      {/* ✅ Products Grid — Edit and Delete only */}
-      {!loading && !error && products.length > 0 && (
+      {/* Products Grid */}
+      {!loading && products.length > 0 && (
         <div style={styles.productsGrid}>
           {products.map((product) => (
             <div key={product.id} style={styles.productCard}>
 
-              {/* Product Image */}
-              {product.image_url ? (
+              {product.image_url && (
                 <img
                   src={product.image_url}
                   alt={product.product_name}
                   style={styles.productImage}
+                  onError={(e) => { e.target.style.display = 'none' }}
                 />
-              ) : (
-                <div style={styles.noImageBox}>
-                  <span style={styles.noImageText}>🖼️ No Image</span>
-                </div>
               )}
 
-              {/* Product Details */}
               <div style={styles.productInfo}>
-                <h3 style={styles.productName}>{product.product_name}</h3>
+                <p style={styles.productName}>{product.product_name}</p>
                 <p style={styles.productPrice}>💰 ₹{product.price}</p>
-                <p style={styles.productMeta}>
-                  🎨 {product.color || '-'} | 🏷️ {product.category || '-'}
-                </p>
-
-                {/* Sizes */}
-                {product.size && (
-                  <div style={styles.sizesRow}>
-                    <span style={styles.sizeLabel}>📐 Sizes:</span>
-                    {getSizes(product.size).map(size => (
-                      <span key={size} style={styles.sizeTag}>{size}</span>
-                    ))}
-                  </div>
-                )}
-
-                {/* Stock badge */}
-                <span style={{
-                  ...styles.stockBadge,
-                  backgroundColor: product.stock > 10 ? '#e8f5e9' : '#ffebee',
-                  color: product.stock > 10 ? '#2e7d32' : '#c62828'
-                }}>
-                  📦 Stock: {product.stock}
-                </span>
+                <p style={styles.productDetail}>📦 Stock: {product.stock}</p>
+                {product.size && <p style={styles.productDetail}>📐 Sizes: {product.size}</p>}
+                {product.color && <p style={styles.productDetail}>🎨 Color: {product.color}</p>}
+                {product.category && <p style={styles.productDetail}>🏷️ {product.category}</p>}
               </div>
 
-              {/* ✅ Edit and Delete only — no Add to Cart */}
-              <div style={styles.cardActions}>
+              <div style={styles.productActions}>
                 <button
                   style={styles.editBtn}
                   onClick={() => handleEditClick(product)}
@@ -290,7 +341,7 @@ function Products({ owner }) {
                 </button>
                 <button
                   style={styles.deleteBtn}
-                  onClick={() => handleDelete(product.id, product.product_name)}
+                  onClick={() => handleDelete(product.id)}
                 >
                   🗑️ Delete
                 </button>
@@ -306,25 +357,19 @@ function Products({ owner }) {
 }
 
 const styles = {
-  container: {
-    fontFamily: 'Arial, sans-serif',
-    padding: '20px 0',
-  },
+  container: { padding: '0' },
   header: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '20px',
     backgroundColor: '#fff',
     padding: '16px 20px',
     borderRadius: '12px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    marginBottom: '20px',
   },
-  title: {
-    margin: 0,
-    fontSize: '22px',
-    color: '#333',
-  },
+  title: { margin: 0, fontSize: '22px', color: '#333' },
+  subtitle: { margin: '4px 0 0', fontSize: '13px', color: '#999' },
   addBtn: {
     padding: '10px 20px',
     backgroundColor: '#4CAF50',
@@ -335,33 +380,27 @@ const styles = {
     fontSize: '14px',
     fontWeight: 'bold',
   },
-  formBox: {
+  formCard: {
     backgroundColor: '#fff',
     borderRadius: '12px',
     padding: '24px',
-    marginBottom: '20px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    marginBottom: '20px',
   },
-  formTitle: {
-    margin: '0 0 20px',
-    fontSize: '18px',
-    color: '#333',
-  },
+  formTitle: { margin: '0 0 20px', fontSize: '18px', color: '#333' },
   formGrid: {
     display: 'grid',
     gridTemplateColumns: '1fr 1fr',
     gap: '16px',
+    marginBottom: '16px',
   },
   formField: {
     display: 'flex',
     flexDirection: 'column',
     gap: '6px',
+    marginBottom: '4px',
   },
-  label: {
-    fontSize: '13px',
-    color: '#555',
-    fontWeight: 'bold',
-  },
+  label: { fontSize: '14px', color: '#555', fontWeight: 'bold' },
   input: {
     padding: '10px 14px',
     borderRadius: '8px',
@@ -370,10 +409,28 @@ const styles = {
     outline: 'none',
     backgroundColor: '#fafafa',
   },
-  formActions: {
+  fileInput: {
+    padding: '8px',
+    borderRadius: '8px',
+    border: '1px solid #ddd',
+    fontSize: '14px',
+    backgroundColor: '#fafafa',
+    cursor: 'pointer',
+  },
+  formButtons: {
     display: 'flex',
     gap: '12px',
+    justifyContent: 'flex-end',
     marginTop: '20px',
+  },
+  cancelBtn: {
+    padding: '10px 20px',
+    backgroundColor: '#f0f0f0',
+    color: '#333',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontSize: '14px',
   },
   saveBtn: {
     padding: '10px 24px',
@@ -385,15 +442,10 @@ const styles = {
     fontSize: '14px',
     fontWeight: 'bold',
   },
-  cancelBtn: {
-    padding: '10px 24px',
-    backgroundColor: '#f0f0f0',
-    color: '#333',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-  },
+  center: { textAlign: 'center', padding: '60px' },
+  loadingText: { fontSize: '18px', color: '#999' },
+  emptyText: { fontSize: '20px', color: '#666' },
+  emptySubText: { fontSize: '14px', color: '#999' },
   productsGrid: {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -402,8 +454,8 @@ const styles = {
   productCard: {
     backgroundColor: '#fff',
     borderRadius: '12px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     overflow: 'hidden',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     display: 'flex',
     flexDirection: 'column',
   },
@@ -412,128 +464,54 @@ const styles = {
     height: '180px',
     objectFit: 'cover',
   },
-  noImageBox: {
-    width: '100%',
-    height: '180px',
-    backgroundColor: '#f5f5f5',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noImageText: {
-    color: '#999',
-    fontSize: '14px',
-  },
   productInfo: {
     padding: '16px',
     flex: 1,
   },
   productName: {
     margin: '0 0 8px',
-    fontSize: '16px',
+    fontSize: '15px',
+    fontWeight: 'bold',
     color: '#333',
   },
   productPrice: {
-    margin: '0 0 6px',
+    margin: '0 0 4px',
     fontSize: '15px',
-    color: '#333',
     fontWeight: 'bold',
+    color: '#4CAF50',
   },
-  productMeta: {
-    margin: '0 0 8px',
+  productDetail: {
+    margin: '2px 0',
     fontSize: '13px',
     color: '#666',
   },
-  sizesRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: '4px',
-    marginBottom: '8px',
-  },
-  sizeLabel: {
-    fontSize: '12px',
-    color: '#666',
-    marginRight: '4px',
-  },
-  sizeTag: {
-    padding: '2px 8px',
-    backgroundColor: '#e3f2fd',
-    color: '#1565c0',
-    borderRadius: '4px',
-    fontSize: '12px',
-    fontWeight: 'bold',
-  },
-  stockBadge: {
-    display: 'inline-block',
-    padding: '4px 10px',
-    borderRadius: '20px',
-    fontSize: '12px',
-    fontWeight: 'bold',
-    marginTop: '4px',
-  },
-  // ✅ Edit and Delete only
-  cardActions: {
-    padding: '12px 16px',
-    borderTop: '1px solid #f0f0f0',
+  productActions: {
     display: 'flex',
     gap: '8px',
+    padding: '12px 16px',
+    borderTop: '1px solid #f0f0f0',
   },
   editBtn: {
     flex: 1,
-    padding: '10px',
-    backgroundColor: '#FF9800',
+    padding: '8px',
+    backgroundColor: '#2196F3',
     color: '#fff',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: 'bold',
   },
   deleteBtn: {
     flex: 1,
-    padding: '10px',
+    padding: '8px',
     backgroundColor: '#F44336',
     color: '#fff',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '6px',
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: 'bold',
-  },
-  center: {
-    textAlign: 'center',
-    padding: '60px',
-  },
-  loadingText: {
-    fontSize: '18px',
-    color: '#999',
-  },
-  emptyText: {
-    fontSize: '20px',
-    color: '#666',
-  },
-  emptySubText: {
-    fontSize: '14px',
-    color: '#999',
-  },
-  errorBox: {
-    backgroundColor: '#ffebee',
-    border: '1px solid #ffcdd2',
-    borderRadius: '8px',
-    padding: '16px',
-    textAlign: 'center',
-    color: '#c62828',
-    marginBottom: '16px',
-  },
-  retryBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#F44336',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    marginTop: '8px',
   },
 }
 
