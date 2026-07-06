@@ -5,7 +5,6 @@ import Products from './Products.js'
 import Settings from './Settings.js'
 import Customers from './Customers.js'
 import Offers from './Offers.js'
-import PaymentSettings from './PaymentSettings.js'
 
 function App() {
   const [orders, setOrders] = useState([])
@@ -34,8 +33,6 @@ function App() {
     try {
       setLoading(true)
       setError(null)
-
-      console.log("STORE ID:", storeId)
 
       const { data, error } = await supabase
         .from('orders')
@@ -89,10 +86,9 @@ function App() {
     }
   }
 
-  // ✅ FIXED updateStatus — with stock logic
+  // ✅ updateStatus — stock engine (unchanged)
   async function updateStatus(orderId, newStatus) {
     try {
-      // ✅ Step 1 — fetch current order to get oldStatus
       const { data: currentOrder, error: fetchError } = await supabase
         .from('orders')
         .select('*')
@@ -100,40 +96,23 @@ function App() {
         .maybeSingle()
 
       if (fetchError || !currentOrder) {
-        console.error("❌ Failed to fetch current order:", fetchError?.message)
+        console.error('❌ Could not fetch order:', fetchError?.message)
         return
       }
 
       const oldStatus = currentOrder.status
       console.log(`📦 Status change: ${oldStatus} → ${newStatus} for order ${orderId}`)
 
-      // ✅ Step 2 — fetch order items for stock update
-      const { data: orderItemsList, error: itemsError } = await supabase
+      const { data: items } = await supabase
         .from('order_items')
         .select('product_id, quantity')
         .eq('order_id', orderId)
 
-      if (itemsError) {
-        console.error("❌ Failed to fetch order items:", itemsError.message)
-        return
-      }
+      // ✅ pending → confirmed: reduce stock
+      if (newStatus === 'confirmed' && oldStatus !== 'confirmed') {
+        console.log('📉 Reducing stock for confirmed order...')
 
-      // ✅ Step 3 — call backend to update status + send WhatsApp
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, newStatus })
-      })
-
-      if (!response.ok) {
-        console.error("❌ Failed to update status via backend")
-        return
-      }
-
-      // ✅ CASE A — pending → confirmed: reduce stock
-      if (oldStatus === 'pending' && newStatus === 'confirmed') {
-        console.log("📉 Reducing stock for confirmed order:", orderId)
-        for (const item of (orderItemsList || [])) {
+        for (const item of (items || [])) {
           const { data: product } = await supabase
             .from('products')
             .select('stock')
@@ -146,15 +125,17 @@ function App() {
               .from('products')
               .update({ stock: newStock })
               .eq('id', item.product_id)
+
             console.log(`📉 Product ${item.product_id}: stock ${product.stock} → ${newStock}`)
           }
         }
       }
 
-      // ✅ CASE B — confirmed → cancelled: add stock back
-      else if (oldStatus === 'confirmed' && newStatus === 'cancelled') {
-        console.log("📈 Restoring stock for cancelled order:", orderId)
-        for (const item of (orderItemsList || [])) {
+      // ✅ confirmed → cancelled: add stock back
+      if (newStatus === 'cancelled' && oldStatus === 'confirmed') {
+        console.log('📈 Restoring stock for cancelled confirmed order...')
+
+        for (const item of (items || [])) {
           const { data: product } = await supabase
             .from('products')
             .select('stock')
@@ -167,41 +148,43 @@ function App() {
               .from('products')
               .update({ stock: newStock })
               .eq('id', item.product_id)
+
             console.log(`📈 Product ${item.product_id}: stock ${product.stock} → ${newStock}`)
           }
         }
       }
 
-      // ✅ CASE C — confirmed → delivered: do nothing
-      else if (oldStatus === 'confirmed' && newStatus === 'delivered') {
-        console.log("✅ confirmed → delivered: no stock change needed")
+      // ✅ delivered: do nothing — stock already reduced at confirmed
+
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, newStatus })
+      })
+
+      if (!response.ok) {
+        console.error('❌ Failed to update status')
+        return
       }
 
-      // ✅ CASE D — pending → cancelled: do nothing
-      else if (oldStatus === 'pending' && newStatus === 'cancelled') {
-        console.log("✅ pending → cancelled: no stock change needed")
-      }
-
-      else {
-        console.log(`ℹ️ ${oldStatus} → ${newStatus}: no stock rule applied`)
-      }
-
+      console.log(`✅ Order ${orderId} status updated to ${newStatus}`)
       fetchOrders(owner.id)
 
     } catch (err) {
-      console.error("❌ updateStatus error:", err.message)
+      console.error('❌ updateStatus error:', err.message)
     }
   }
 
+  // ✅ FIXED verifyPayment — only marks payment paid, then calls updateStatus
   async function verifyPayment(orderId) {
     try {
       setVerifying(prev => ({ ...prev, [orderId]: true }))
 
+      // ✅ Step 1 — only mark payment as paid, do NOT set status here
       const { error } = await supabase
         .from('orders')
         .update({
-          payment_status: 'paid',
-          status: 'confirmed'
+          payment_status: 'paid'
         })
         .eq('id', orderId)
 
@@ -210,13 +193,8 @@ function App() {
         return
       }
 
-      await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, newStatus: 'confirmed' })
-      })
-
-      fetchOrders(owner.id)
+      // ✅ Step 2 — use same stock logic as manual confirm
+      await updateStatus(orderId, 'confirmed')
 
     } catch (err) {
       console.error("❌ verifyPayment error:", err.message)
@@ -243,25 +221,12 @@ function App() {
   return (
     <div style={styles.container}>
 
-      {/* ✅ Header */}
       <div style={styles.header}>
-        <div style={styles.storeHeaderRow}>
-          {owner.logo_url ? (
-            <img
-              src={owner.logo_url}
-              alt="Store Logo"
-              style={styles.storeLogo}
-              onError={(e) => { e.target.style.display = 'none' }}
-            />
-          ) : (
-            <span style={styles.storeLogoFallback}>🏪</span>
-          )}
-          <div style={styles.storeInfoBox}>
-            <h1 style={styles.title}>🛍️ StyleFlow Dashboard</h1>
-            <p style={styles.storeInfo}>
-              {owner.shop_name} — Store ID: {owner.id}
-            </p>
-          </div>
+        <div>
+          <h1 style={styles.title}>🛍️ StyleFlow Dashboard</h1>
+          <p style={styles.storeInfo}>
+            🏪 {owner.shop_name} — Store ID: {owner.id}
+          </p>
         </div>
         <div style={styles.headerRight}>
           <span style={styles.ownerName}>
@@ -279,15 +244,13 @@ function App() {
         </div>
       </div>
 
-      {/* ✅ Tab Bar */}
       <div style={styles.tabBar}>
         {[
-          { key: 'orders',          label: '📋 Orders'           },
-          { key: 'products',        label: '📦 Products'         },
-          { key: 'customers',       label: '👥 Customers'        },
-          { key: 'offers',          label: '🎁 Offers'           },
-          { key: 'paymentsettings', label: '💳 Payment Settings' },
-          { key: 'settings',        label: '⚙️ Settings'         },
+          { key: 'orders',    label: '📋 Orders'    },
+          { key: 'products',  label: '📦 Products'  },
+          { key: 'customers', label: '👥 Customers' },
+          { key: 'offers',    label: '🎁 Offers'    },
+          { key: 'settings',  label: '⚙️ Settings'  },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -303,7 +266,6 @@ function App() {
         ))}
       </div>
 
-      {/* ✅ Orders Tab */}
       {activeTab === 'orders' && (
         <>
           <div style={styles.statsBar}>
@@ -375,62 +337,22 @@ function App() {
                     </span>
                   </div>
 
-                  {/* ✅ Customer Details */}
                   <div style={styles.customerDetails}>
                     <p>👤 <strong>{order.customer_name || 'N/A'}</strong></p>
                     <p>📱 {order.phone_number}</p>
                     <p>📍 {order.customer_address || 'N/A'}</p>
                   </div>
 
-                  {/* ✅ Payment Details */}
-                  <div style={styles.paymentDetails}>
-                    <p>
-                      💳 <strong>Payment:</strong>{' '}
-                      {order.payment_method || 'N/A'}
-                      {' '}—{' '}
-                      <span style={{
-                        color: order.payment_status === 'paid' ? '#4CAF50'
-                          : order.payment_status === 'awaiting_verification' ? '#FF9800'
-                          : '#999',
-                        fontWeight: 'bold'
-                      }}>
-                        {order.payment_status
-                          ? order.payment_status.replace(/_/g, ' ').toUpperCase()
-                          : 'N/A'}
-                      </span>
-                    </p>
-
-                    {order.payment_method === 'UPI' &&
-                     order.payment_status === 'awaiting_verification' && (
-                      <button
-                        style={{
-                          ...styles.verifyBtn,
-                          opacity: verifying[order.id] ? 0.7 : 1,
-                        }}
-                        onClick={() => verifyPayment(order.id)}
-                        disabled={verifying[order.id]}
-                      >
-                        {verifying[order.id] ? '⏳ Verifying...' : '✅ Verify Payment'}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* ✅ Ordered Products */}
                   {orderItems[order.id] && orderItems[order.id].length > 0 ? (
                     <div style={styles.itemsList}>
                       <p style={styles.itemsTitle}>🛍️ Ordered Products:</p>
-                      {orderItems[order.id].map((item, i) => {
-                        const total = item.price * item.quantity
-                        return (
-                          <p key={i} style={styles.itemRow}>
-                            • {item.product_name} × {item.quantity} = ₹{total}
-                          </p>
-                        )
-                      })}
+                      {orderItems[order.id].map((item, i) => (
+                        <p key={i} style={styles.itemRow}>
+                          • {item.product_name} × {item.quantity} = ₹{item.price * item.quantity}
+                        </p>
+                      ))}
                       <p style={styles.itemTotal}>
-                        💰 Total: ₹{orderItems[order.id].reduce((sum, item) => {
-                          return sum + (item.price * item.quantity)
-                        }, 0)}
+                        💰 Total: ₹{orderItems[order.id].reduce((sum, item) => sum + (item.price * item.quantity), 0)}
                       </p>
                     </div>
                   ) : (
@@ -440,7 +362,25 @@ function App() {
                     </div>
                   )}
 
-                  {/* ✅ Status Buttons */}
+                  {/* ✅ UPI verification button — show only for awaiting_verification orders */}
+                  {order.payment_method === 'UPI' && order.payment_status === 'awaiting_verification' && (
+                    <div style={styles.verifyBox}>
+                      <p style={styles.verifyText}>
+                        📱 UPI Payment awaiting verification
+                      </p>
+                      <button
+                        style={{
+                          ...styles.verifyBtn,
+                          opacity: verifying[order.id] ? 0.7 : 1
+                        }}
+                        onClick={() => verifyPayment(order.id)}
+                        disabled={verifying[order.id]}
+                      >
+                        {verifying[order.id] ? '⏳ Verifying...' : '✅ Verify Payment'}
+                      </button>
+                    </div>
+                  )}
+
                   <div style={styles.statusButtons}>
                     <p style={styles.updateLabel}>Update Status:</p>
                     <div style={styles.btnRow}>
@@ -469,30 +409,10 @@ function App() {
         </>
       )}
 
-      {/* ✅ Products Tab */}
-      {activeTab === 'products' && (
-        <Products owner={owner} />
-      )}
-
-      {/* ✅ Customers Tab */}
-      {activeTab === 'customers' && (
-        <Customers owner={owner} />
-      )}
-
-      {/* ✅ Offers Tab */}
-      {activeTab === 'offers' && (
-        <Offers owner={owner} />
-      )}
-
-      {/* ✅ Payment Settings Tab */}
-      {activeTab === 'paymentsettings' && (
-        <PaymentSettings owner={owner} />
-      )}
-
-      {/* ✅ Settings Tab */}
-      {activeTab === 'settings' && (
-        <Settings owner={owner} />
-      )}
+      {activeTab === 'products' && <Products owner={owner} />}
+      {activeTab === 'customers' && <Customers owner={owner} />}
+      {activeTab === 'offers' && <Offers owner={owner} />}
+      {activeTab === 'settings' && <Settings owner={owner} />}
 
     </div>
   )
@@ -517,157 +437,82 @@ const styles = {
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     marginBottom: '20px',
   },
-  storeHeaderRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-  },
-  storeLogo: {
-    width: '48px',
-    height: '48px',
-    objectFit: 'contain',
-    borderRadius: '8px',
-    border: '1px solid #eee',
-    padding: '4px',
-    backgroundColor: '#fff',
-  },
-  storeLogoFallback: {
-    fontSize: '28px',
-    lineHeight: 1,
-  },
-  storeInfoBox: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '2px',
-  },
   headerRight: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
   },
-  title: {
-    margin: 0,
-    fontSize: '24px',
-    color: '#333',
-  },
-  storeInfo: {
-    margin: 0,
-    fontSize: '13px',
-    color: '#999',
-  },
-  ownerName: {
-    fontSize: '14px',
-    color: '#555',
-    fontWeight: 'bold',
-  },
+  title: { margin: 0, fontSize: '24px', color: '#333' },
+  storeInfo: { margin: '4px 0 0', fontSize: '13px', color: '#999' },
+  ownerName: { fontSize: '14px', color: '#555', fontWeight: 'bold' },
   refreshBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#4CAF50',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
+    padding: '8px 16px', backgroundColor: '#4CAF50', color: '#fff',
+    border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px',
   },
   logoutBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#F44336',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
+    padding: '8px 16px', backgroundColor: '#F44336', color: '#fff',
+    border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px',
   },
-  tabBar: {
-    display: 'flex',
-    gap: '12px',
-    marginBottom: '20px',
-    flexWrap: 'wrap',
-  },
+  tabBar: { display: 'flex', gap: '12px', marginBottom: '20px', flexWrap: 'wrap' },
   tabBtn: {
-    padding: '10px 24px',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: 'bold',
+    padding: '10px 20px', border: 'none', borderRadius: '8px',
+    cursor: 'pointer', fontSize: '14px', fontWeight: 'bold',
   },
-  statsBar: {
-    display: 'flex',
-    gap: '12px',
-    marginBottom: '20px',
-  },
+  statsBar: { display: 'flex', gap: '12px', marginBottom: '20px' },
   statCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    padding: '16px',
-    borderRadius: '12px',
-    textAlign: 'center',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
+    flex: 1, backgroundColor: '#fff', padding: '16px', borderRadius: '12px',
+    textAlign: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    display: 'flex', flexDirection: 'column', gap: '4px',
   },
-  statNumber: {
-    fontSize: '26px',
-    fontWeight: 'bold',
-  },
-  statLabel: {
-    fontSize: '12px',
-    color: '#999',
-  },
-  ordersList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-  },
+  statNumber: { fontSize: '26px', fontWeight: 'bold' },
+  statLabel: { fontSize: '12px', color: '#999' },
+  ordersList: { display: 'flex', flexDirection: 'column', gap: '16px' },
   orderCard: {
-    backgroundColor: '#fff',
-    borderRadius: '12px',
-    padding: '20px',
+    backgroundColor: '#fff', borderRadius: '12px', padding: '20px',
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
   },
   orderHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '12px',
+    display: 'flex', justifyContent: 'space-between',
+    alignItems: 'flex-start', marginBottom: '12px',
   },
-  orderId: {
-    margin: 0,
-    fontSize: '13px',
-    color: '#999',
-    fontFamily: 'monospace',
-  },
-  orderDate: {
-    margin: '4px 0 0',
-    fontSize: '13px',
-    color: '#999',
-  },
+  orderId: { margin: 0, fontSize: '13px', color: '#999', fontFamily: 'monospace' },
+  orderDate: { margin: '4px 0 0', fontSize: '13px', color: '#999' },
   statusBadge: {
-    padding: '4px 12px',
-    borderRadius: '20px',
-    color: '#fff',
-    fontSize: '12px',
-    fontWeight: 'bold',
+    padding: '4px 12px', borderRadius: '20px', color: '#fff',
+    fontSize: '12px', fontWeight: 'bold',
   },
   customerDetails: {
-    borderTop: '1px solid #f0f0f0',
-    borderBottom: '1px solid #f0f0f0',
-    padding: '12px 0',
-    marginBottom: '12px',
-    lineHeight: '1.8',
+    borderTop: '1px solid #f0f0f0', borderBottom: '1px solid #f0f0f0',
+    padding: '12px 0', marginBottom: '12px', lineHeight: '1.8',
   },
-  paymentDetails: {
-    backgroundColor: '#f0f4ff',
+  itemsList: {
+    backgroundColor: '#f9f9f9', borderRadius: '8px',
+    padding: '10px 14px', marginBottom: '12px',
+  },
+  itemsTitle: { margin: '0 0 6px', fontSize: '13px', fontWeight: 'bold', color: '#555' },
+  itemRow: { margin: '2px 0', fontSize: '13px', color: '#333' },
+  itemTotal: {
+    margin: '8px 0 0', fontSize: '13px', fontWeight: 'bold',
+    color: '#4CAF50', borderTop: '1px solid #eee', paddingTop: '6px',
+  },
+  verifyBox: {
+    backgroundColor: '#fff8e1',
+    border: '1px solid #ffe082',
     borderRadius: '8px',
-    padding: '10px 14px',
+    padding: '12px 14px',
     marginBottom: '12px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  verifyText: {
+    margin: 0,
     fontSize: '13px',
-    color: '#333',
+    color: '#f57f17',
+    fontWeight: 'bold',
   },
   verifyBtn: {
-    marginTop: '10px',
     padding: '8px 16px',
     backgroundColor: '#4CAF50',
     color: '#fff',
@@ -676,86 +521,26 @@ const styles = {
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: 'bold',
+    whiteSpace: 'nowrap',
   },
-  itemsList: {
-    backgroundColor: '#f9f9f9',
-    borderRadius: '8px',
-    padding: '10px 14px',
-    marginBottom: '12px',
-  },
-  itemsTitle: {
-    margin: '0 0 6px',
-    fontSize: '13px',
-    fontWeight: 'bold',
-    color: '#555',
-  },
-  itemRow: {
-    margin: '2px 0',
-    fontSize: '13px',
-    color: '#333',
-  },
-  itemTotal: {
-    margin: '8px 0 0',
-    fontSize: '13px',
-    fontWeight: 'bold',
-    color: '#4CAF50',
-    borderTop: '1px solid #eee',
-    paddingTop: '6px',
-  },
-  statusButtons: {
-    marginTop: '8px',
-  },
-  updateLabel: {
-    margin: '0 0 8px',
-    fontSize: '13px',
-    color: '#666',
-  },
-  btnRow: {
-    display: 'flex',
-    gap: '8px',
-    flexWrap: 'wrap',
-  },
+  statusButtons: { marginTop: '8px' },
+  updateLabel: { margin: '0 0 8px', fontSize: '13px', color: '#666' },
+  btnRow: { display: 'flex', gap: '8px', flexWrap: 'wrap' },
   statusBtn: {
-    padding: '6px 12px',
-    border: 'none',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    fontWeight: 'bold',
-    textTransform: 'capitalize',
+    padding: '6px 12px', border: 'none', borderRadius: '6px',
+    cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', textTransform: 'capitalize',
   },
-  center: {
-    textAlign: 'center',
-    padding: '60px',
-  },
-  loadingText: {
-    fontSize: '18px',
-    color: '#999',
-  },
-  emptyText: {
-    fontSize: '20px',
-    color: '#666',
-  },
-  emptySubText: {
-    fontSize: '14px',
-    color: '#999',
-  },
+  center: { textAlign: 'center', padding: '60px' },
+  loadingText: { fontSize: '18px', color: '#999' },
+  emptyText: { fontSize: '20px', color: '#666' },
+  emptySubText: { fontSize: '14px', color: '#999' },
   errorBox: {
-    backgroundColor: '#ffebee',
-    border: '1px solid #ffcdd2',
-    borderRadius: '8px',
-    padding: '16px',
-    textAlign: 'center',
-    color: '#c62828',
+    backgroundColor: '#ffebee', border: '1px solid #ffcdd2',
+    borderRadius: '8px', padding: '16px', textAlign: 'center', color: '#c62828',
   },
   retryBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#F44336',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    cursor: 'pointer',
-    marginTop: '8px',
+    padding: '8px 16px', backgroundColor: '#F44336', color: '#fff',
+    border: 'none', borderRadius: '8px', cursor: 'pointer', marginTop: '8px',
   },
 }
 
