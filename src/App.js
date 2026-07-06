@@ -89,8 +89,36 @@ function App() {
     }
   }
 
+  // ✅ FIXED updateStatus — with stock logic
   async function updateStatus(orderId, newStatus) {
     try {
+      // ✅ Step 1 — fetch current order to get oldStatus
+      const { data: currentOrder, error: fetchError } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('id', orderId)
+        .maybeSingle()
+
+      if (fetchError || !currentOrder) {
+        console.error("❌ Failed to fetch current order:", fetchError?.message)
+        return
+      }
+
+      const oldStatus = currentOrder.status
+      console.log(`📦 Status change: ${oldStatus} → ${newStatus} for order ${orderId}`)
+
+      // ✅ Step 2 — fetch order items for stock update
+      const { data: orderItemsList, error: itemsError } = await supabase
+        .from('order_items')
+        .select('product_id, quantity')
+        .eq('order_id', orderId)
+
+      if (itemsError) {
+        console.error("❌ Failed to fetch order items:", itemsError.message)
+        return
+      }
+
+      // ✅ Step 3 — call backend to update status + send WhatsApp
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -98,11 +126,68 @@ function App() {
       })
 
       if (!response.ok) {
-        console.error("❌ Failed to update status")
+        console.error("❌ Failed to update status via backend")
         return
       }
 
+      // ✅ CASE A — pending → confirmed: reduce stock
+      if (oldStatus === 'pending' && newStatus === 'confirmed') {
+        console.log("📉 Reducing stock for confirmed order:", orderId)
+        for (const item of (orderItemsList || [])) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', item.product_id)
+            .maybeSingle()
+
+          if (product) {
+            const newStock = Math.max(0, (product.stock || 0) - item.quantity)
+            await supabase
+              .from('products')
+              .update({ stock: newStock })
+              .eq('id', item.product_id)
+            console.log(`📉 Product ${item.product_id}: stock ${product.stock} → ${newStock}`)
+          }
+        }
+      }
+
+      // ✅ CASE B — confirmed → cancelled: add stock back
+      else if (oldStatus === 'confirmed' && newStatus === 'cancelled') {
+        console.log("📈 Restoring stock for cancelled order:", orderId)
+        for (const item of (orderItemsList || [])) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('stock')
+            .eq('id', item.product_id)
+            .maybeSingle()
+
+          if (product) {
+            const newStock = (product.stock || 0) + item.quantity
+            await supabase
+              .from('products')
+              .update({ stock: newStock })
+              .eq('id', item.product_id)
+            console.log(`📈 Product ${item.product_id}: stock ${product.stock} → ${newStock}`)
+          }
+        }
+      }
+
+      // ✅ CASE C — confirmed → delivered: do nothing
+      else if (oldStatus === 'confirmed' && newStatus === 'delivered') {
+        console.log("✅ confirmed → delivered: no stock change needed")
+      }
+
+      // ✅ CASE D — pending → cancelled: do nothing
+      else if (oldStatus === 'pending' && newStatus === 'cancelled') {
+        console.log("✅ pending → cancelled: no stock change needed")
+      }
+
+      else {
+        console.log(`ℹ️ ${oldStatus} → ${newStatus}: no stock rule applied`)
+      }
+
       fetchOrders(owner.id)
+
     } catch (err) {
       console.error("❌ updateStatus error:", err.message)
     }
@@ -161,7 +246,6 @@ function App() {
       {/* ✅ Header */}
       <div style={styles.header}>
         <div style={styles.storeHeaderRow}>
-          {/* ✅ B — show logo if exists, else fallback emoji */}
           {owner.logo_url ? (
             <img
               src={owner.logo_url}
@@ -433,7 +517,6 @@ const styles = {
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     marginBottom: '20px',
   },
-  // ✅ C — new logo styles
   storeHeaderRow: {
     display: 'flex',
     alignItems: 'center',
