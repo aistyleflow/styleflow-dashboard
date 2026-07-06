@@ -14,7 +14,7 @@ function App() {
   const [error, setError] = useState(null)
   const [owner, setOwner] = useState(null)
   const [activeTab, setActiveTab] = useState('orders')
-  const [verifying, setVerifying] = useState({})  // ✅ NEW — track verify loading per order
+  const [verifying, setVerifying] = useState({})
 
   function handleLoginSuccess(ownerData) {
     console.log("✅ Login success — store_id:", ownerData.id)
@@ -108,12 +108,10 @@ function App() {
     }
   }
 
-  // ✅ NEW — Verify UPI payment
   async function verifyPayment(orderId) {
     try {
       setVerifying(prev => ({ ...prev, [orderId]: true }))
 
-      // ✅ Update payment_status to paid + order status to confirmed
       const { error } = await supabase
         .from('orders')
         .update({
@@ -127,7 +125,6 @@ function App() {
         return
       }
 
-      // ✅ Also send WhatsApp notification via backend
       await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -163,11 +160,24 @@ function App() {
 
       {/* ✅ Header */}
       <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>🛍️ StyleFlow Dashboard</h1>
-          <p style={styles.storeInfo}>
-            🏪 {owner.shop_name} — Store ID: {owner.id}
-          </p>
+        <div style={styles.storeHeaderRow}>
+          {/* ✅ B — show logo if exists, else fallback emoji */}
+          {owner.logo_url ? (
+            <img
+              src={owner.logo_url}
+              alt="Store Logo"
+              style={styles.storeLogo}
+              onError={(e) => { e.target.style.display = 'none' }}
+            />
+          ) : (
+            <span style={styles.storeLogoFallback}>🏪</span>
+          )}
+          <div style={styles.storeInfoBox}>
+            <h1 style={styles.title}>🛍️ StyleFlow Dashboard</h1>
+            <p style={styles.storeInfo}>
+              {owner.shop_name} — Store ID: {owner.id}
+            </p>
+          </div>
         </div>
         <div style={styles.headerRight}>
           <span style={styles.ownerName}>
@@ -306,7 +316,6 @@ function App() {
                       </span>
                     </p>
 
-                    {/* ✅ NEW — Verify Payment button for UPI pending orders */}
                     {order.payment_method === 'UPI' &&
                      order.payment_status === 'awaiting_verification' && (
                       <button
@@ -424,6 +433,30 @@ const styles = {
     boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
     marginBottom: '20px',
   },
+  // ✅ C — new logo styles
+  storeHeaderRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  storeLogo: {
+    width: '48px',
+    height: '48px',
+    objectFit: 'contain',
+    borderRadius: '8px',
+    border: '1px solid #eee',
+    padding: '4px',
+    backgroundColor: '#fff',
+  },
+  storeLogoFallback: {
+    fontSize: '28px',
+    lineHeight: 1,
+  },
+  storeInfoBox: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
   headerRight: {
     display: 'flex',
     alignItems: 'center',
@@ -435,7 +468,7 @@ const styles = {
     color: '#333',
   },
   storeInfo: {
-    margin: '4px 0 0',
+    margin: 0,
     fontSize: '13px',
     color: '#999',
   },
@@ -550,7 +583,6 @@ const styles = {
     fontSize: '13px',
     color: '#333',
   },
-  // ✅ NEW
   verifyBtn: {
     marginTop: '10px',
     padding: '8px 16px',
