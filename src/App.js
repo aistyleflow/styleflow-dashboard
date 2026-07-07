@@ -15,6 +15,7 @@ function App() {
   const [owner, setOwner] = useState(null)
   const [activeTab, setActiveTab] = useState('orders')
   const [verifying, setVerifying] = useState({})
+  const [updatingOrderId, setUpdatingOrderId] = useState(null) // ✅ Step 1
 
   function handleLoginSuccess(ownerData) {
     console.log("✅ Login success — store_id:", ownerData.id)
@@ -30,7 +31,6 @@ function App() {
     setActiveTab('orders')
   }
 
-  // ✅ FIXED fetchOrders — 3 queries only instead of N*M queries
   const fetchOrders = async (storeId) => {
     try {
       setLoading(true)
@@ -38,7 +38,6 @@ function App() {
 
       console.log("STORE ID:", storeId)
 
-      // ✅ Query 1 — fetch all orders
       const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')
@@ -56,21 +55,18 @@ function App() {
         return
       }
 
-      // ✅ Step B — collect all order IDs
       const orderIds = ordersData.map(o => o.id)
 
-      // ✅ Query 2 — fetch all order_items in one query
+      // ✅ Step 4 — added size to select
       const { data: allItems } = await supabase
         .from('order_items')
-        .select('order_id, product_id, quantity')
+        .select('order_id, product_id, quantity, size')
         .in('order_id', orderIds)
 
       const safeAllItems = allItems || []
 
-      // ✅ Step D — collect unique product IDs
       const productIds = [...new Set(safeAllItems.map(i => i.product_id))]
 
-      // ✅ Query 3 — fetch all products in one query
       let productMap = {}
       if (productIds.length > 0) {
         const { data: products } = await supabase
@@ -78,13 +74,11 @@ function App() {
           .select('id, product_name, price')
           .in('id', productIds)
 
-        // ✅ Step F — build product map
         ;(products || []).forEach(p => {
           productMap[p.id] = p
         })
       }
 
-      // ✅ Step G — build itemsMap for each order in JavaScript
       const itemsMap = {}
       for (const order of ordersData) {
         const thisOrderItems = safeAllItems.filter(i => i.order_id === order.id)
@@ -92,10 +86,10 @@ function App() {
           quantity: item.quantity,
           product_name: productMap[item.product_id]?.product_name || 'Unknown',
           price: productMap[item.product_id]?.price || 0,
+          size: item.size || null, // ✅ Step 5 — added size
         }))
       }
 
-      // ✅ Step H — set state
       setOrders(ordersData)
       setOrderItems(itemsMap)
 
@@ -106,9 +100,16 @@ function App() {
     }
   }
 
-  // ✅ updateStatus — unchanged
+  // ✅ Steps 1, 2, 7 — loading lock + same-status block + finally clear
   async function updateStatus(orderId, newStatus) {
     try {
+      // ✅ Step 1 — if already updating this order, block
+      if (updatingOrderId === orderId) {
+        console.log("⚠️ Already updating order:", orderId)
+        return
+      }
+
+      // ✅ Step 1 — fetch current order first
       const { data: currentOrder, error: fetchError } = await supabase
         .from('orders')
         .select('*')
@@ -119,6 +120,15 @@ function App() {
         console.error("❌ Failed to fetch current order:", fetchError?.message)
         return
       }
+
+      // ✅ Step 2 — block same-status click
+      if (currentOrder.status === newStatus) {
+        console.log(`ℹ️ Order ${orderId} already has status: ${newStatus}`)
+        return
+      }
+
+      // ✅ Step 1 — set loading lock after validation
+      setUpdatingOrderId(orderId)
 
       const oldStatus = currentOrder.status
       console.log(`📦 Status change: ${oldStatus} → ${newStatus} for order ${orderId}`)
@@ -192,10 +202,12 @@ function App() {
 
     } catch (err) {
       console.error("❌ updateStatus error:", err.message)
+    } finally {
+      // ✅ Step 7 — always clear loading in finally
+      setUpdatingOrderId(null)
     }
   }
 
-  // ✅ verifyPayment — unchanged
   async function verifyPayment(orderId) {
     try {
       setVerifying(prev => ({ ...prev, [orderId]: true }))
@@ -409,7 +421,7 @@ function App() {
                     )}
                   </div>
 
-                  {/* ✅ Ordered Products */}
+                  {/* ✅ Ordered Products — Step 6: show size */}
                   {orderItems[order.id] && orderItems[order.id].length > 0 ? (
                     <div style={styles.itemsList}>
                       <p style={styles.itemsTitle}>🛍️ Ordered Products:</p>
@@ -417,7 +429,9 @@ function App() {
                         const total = item.price * item.quantity
                         return (
                           <p key={i} style={styles.itemRow}>
-                            • {item.product_name} × {item.quantity} = ₹{total}
+                            • {item.product_name}
+                            {item.size ? ` (Size: ${item.size})` : ''}
+                            {' '}× {item.quantity} = ₹{total}
                           </p>
                         )
                       })}
@@ -434,25 +448,39 @@ function App() {
                     </div>
                   )}
 
-                  {/* ✅ Status Buttons */}
+                  {/* ✅ Status Buttons — Step 3: disabled when updating */}
                   <div style={styles.statusButtons}>
-                    <p style={styles.updateLabel}>Update Status:</p>
+                    <p style={styles.updateLabel}>
+                      Update Status:
+                      {updatingOrderId === order.id && (
+                        <span style={{ marginLeft: '8px', fontSize: '12px', color: '#999' }}>
+                          ⏳ Updating...
+                        </span>
+                      )}
+                    </p>
                     <div style={styles.btnRow}>
-                      {['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'].map((status) => (
-                        <button
-                          key={status}
-                          style={{
-                            ...styles.statusBtn,
-                            backgroundColor: order.status === status
-                              ? getStatusColor(status)
-                              : '#f0f0f0',
-                            color: order.status === status ? '#fff' : '#333',
-                          }}
-                          onClick={() => updateStatus(order.id, status)}
-                        >
-                          {status}
-                        </button>
-                      ))}
+                      {['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'].map((status) => {
+                        const isUpdating = updatingOrderId === order.id
+                        return (
+                          <button
+                            key={status}
+                            style={{
+                              ...styles.statusBtn,
+                              backgroundColor: order.status === status
+                                ? getStatusColor(status)
+                                : '#f0f0f0',
+                              color: order.status === status ? '#fff' : '#333',
+                              // ✅ Step 3 — disabled style
+                              opacity: isUpdating ? 0.5 : 1,
+                              cursor: isUpdating ? 'not-allowed' : 'pointer',
+                            }}
+                            onClick={() => updateStatus(order.id, status)}
+                            disabled={isUpdating} // ✅ Step 3
+                          >
+                            {status}
+                          </button>
+                        )
+                      })}
                     </div>
                   </div>
 
@@ -713,7 +741,6 @@ const styles = {
     padding: '6px 12px',
     border: 'none',
     borderRadius: '6px',
-    cursor: 'pointer',
     fontSize: '12px',
     fontWeight: 'bold',
     textTransform: 'capitalize',
