@@ -30,6 +30,7 @@ function App() {
     setActiveTab('orders')
   }
 
+  // ✅ FIXED fetchOrders — 3 queries only instead of N*M queries
   const fetchOrders = async (storeId) => {
     try {
       setLoading(true)
@@ -37,49 +38,65 @@ function App() {
 
       console.log("STORE ID:", storeId)
 
-      const { data, error } = await supabase
+      // ✅ Query 1 — fetch all orders
+      const { data: ordersData, error: ordersError } = await supabase
         .from('orders')
         .select('*')
         .eq('store_id', Number(storeId))
         .order('store_order_number', { ascending: true })
 
-      if (error) {
-        setError(error.message)
+      if (ordersError) {
+        setError(ordersError.message)
         return
       }
 
-      setOrders(data || [])
-
-      const itemsMap = {}
-      for (const order of (data || [])) {
-        const { data: items, error: itemsError } = await supabase
-          .from('order_items')
-          .select('quantity, product_id')
-          .eq('order_id', order.id)
-
-        if (itemsError || !items || items.length === 0) {
-          itemsMap[order.id] = []
-          continue
-        }
-
-        const enrichedItems = []
-        for (const item of items) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('product_name, price')
-            .eq('id', item.product_id)
-            .maybeSingle()
-
-          enrichedItems.push({
-            quantity: item.quantity,
-            product_name: product?.product_name || 'Unknown',
-            price: product?.price || 0,
-          })
-        }
-
-        itemsMap[order.id] = enrichedItems
+      if (!ordersData || ordersData.length === 0) {
+        setOrders([])
+        setOrderItems({})
+        return
       }
 
+      // ✅ Step B — collect all order IDs
+      const orderIds = ordersData.map(o => o.id)
+
+      // ✅ Query 2 — fetch all order_items in one query
+      const { data: allItems } = await supabase
+        .from('order_items')
+        .select('order_id, product_id, quantity')
+        .in('order_id', orderIds)
+
+      const safeAllItems = allItems || []
+
+      // ✅ Step D — collect unique product IDs
+      const productIds = [...new Set(safeAllItems.map(i => i.product_id))]
+
+      // ✅ Query 3 — fetch all products in one query
+      let productMap = {}
+      if (productIds.length > 0) {
+        const { data: products } = await supabase
+          .from('products')
+          .select('id, product_name, price')
+          .in('id', productIds)
+
+        // ✅ Step F — build product map
+        ;(products || []).forEach(p => {
+          productMap[p.id] = p
+        })
+      }
+
+      // ✅ Step G — build itemsMap for each order in JavaScript
+      const itemsMap = {}
+      for (const order of ordersData) {
+        const thisOrderItems = safeAllItems.filter(i => i.order_id === order.id)
+        itemsMap[order.id] = thisOrderItems.map(item => ({
+          quantity: item.quantity,
+          product_name: productMap[item.product_id]?.product_name || 'Unknown',
+          price: productMap[item.product_id]?.price || 0,
+        }))
+      }
+
+      // ✅ Step H — set state
+      setOrders(ordersData)
       setOrderItems(itemsMap)
 
     } catch (err) {
@@ -89,10 +106,9 @@ function App() {
     }
   }
 
-  // ✅ FIXED updateStatus — correct stock logic
+  // ✅ updateStatus — unchanged
   async function updateStatus(orderId, newStatus) {
     try {
-      // ✅ Step 1 — fetch current order to get oldStatus
       const { data: currentOrder, error: fetchError } = await supabase
         .from('orders')
         .select('*')
@@ -107,7 +123,6 @@ function App() {
       const oldStatus = currentOrder.status
       console.log(`📦 Status change: ${oldStatus} → ${newStatus} for order ${orderId}`)
 
-      // ✅ Step 2 — fetch order items
       const { data: orderItemsList, error: itemsError } = await supabase
         .from('order_items')
         .select('product_id, quantity')
@@ -118,9 +133,7 @@ function App() {
         return
       }
 
-      // ✅ Step 3 — apply stock rules first
       if (oldStatus === 'pending' && newStatus === 'confirmed') {
-        // ✅ CASE A — reduce stock
         console.log("📉 Reducing stock — pending → confirmed, order:", orderId)
         for (const item of (orderItemsList || [])) {
           const { data: product } = await supabase
@@ -138,9 +151,7 @@ function App() {
             console.log(`📉 Product ${item.product_id}: ${product.stock} → ${newStock}`)
           }
         }
-
       } else if (oldStatus === 'confirmed' && newStatus === 'cancelled') {
-        // ✅ CASE B — add stock back
         console.log("📈 Restoring stock — confirmed → cancelled, order:", orderId)
         for (const item of (orderItemsList || [])) {
           const { data: product } = await supabase
@@ -158,21 +169,14 @@ function App() {
             console.log(`📈 Product ${item.product_id}: ${product.stock} → ${newStock}`)
           }
         }
-
       } else if (oldStatus === 'confirmed' && newStatus === 'delivered') {
-        // ✅ CASE C — do nothing
         console.log("✅ confirmed → delivered: no stock change")
-
       } else if (oldStatus === 'pending' && newStatus === 'cancelled') {
-        // ✅ CASE D — do nothing
         console.log("✅ pending → cancelled: no stock change")
-
       } else {
         console.log(`ℹ️ ${oldStatus} → ${newStatus}: no stock rule applied`)
       }
 
-      // ✅ Step 4 — call backend AFTER stock logic
-      // backend updates order status in DB + sends WhatsApp
       const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -191,12 +195,11 @@ function App() {
     }
   }
 
-  // ✅ FIXED verifyPayment — calls updateStatus instead of directly setting confirmed
+  // ✅ verifyPayment — unchanged
   async function verifyPayment(orderId) {
     try {
       setVerifying(prev => ({ ...prev, [orderId]: true }))
 
-      // ✅ Step 1 — mark payment as paid first
       const { error } = await supabase
         .from('orders')
         .update({ payment_status: 'paid' })
@@ -207,7 +210,6 @@ function App() {
         return
       }
 
-      // ✅ Step 2 — call updateStatus so stock logic runs correctly
       await updateStatus(orderId, 'confirmed')
 
     } catch (err) {
