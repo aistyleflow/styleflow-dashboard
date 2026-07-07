@@ -57,15 +57,21 @@ function App() {
 
       const orderIds = ordersData.map(o => o.id)
 
-      // ✅ Step 4 — added size to select
+      // ✅ order_items now carries its own snapshot of product_name/price/size,
+      // so order history no longer depends on the current products table.
       const { data: allItems } = await supabase
         .from('order_items')
-        .select('order_id, product_id, quantity, size')
+        .select('order_id, product_id, quantity, size, product_name, price')
         .in('order_id', orderIds)
 
       const safeAllItems = allItems || []
 
-      const productIds = [...new Set(safeAllItems.map(i => i.product_id))]
+      // ✅ Fallback: only look up products for rows that are missing snapshot
+      // data (i.e. old orders created before the snapshot columns existed).
+      const itemsNeedingFallback = safeAllItems.filter(
+        i => !i.product_name || i.price === null || i.price === undefined
+      )
+      const productIds = [...new Set(itemsNeedingFallback.map(i => i.product_id))]
 
       let productMap = {}
       if (productIds.length > 0) {
@@ -84,9 +90,13 @@ function App() {
         const thisOrderItems = safeAllItems.filter(i => i.order_id === order.id)
         itemsMap[order.id] = thisOrderItems.map(item => ({
           quantity: item.quantity,
-          product_name: productMap[item.product_id]?.product_name || 'Unknown',
-          price: productMap[item.product_id]?.price || 0,
-          size: item.size || null, // ✅ Step 5 — added size
+          // ✅ prefer the permanent snapshot; fall back to live product lookup
+          // only for old rows that don't have a snapshot saved
+          product_name: item.product_name || productMap[item.product_id]?.product_name || 'Unknown',
+          price: (item.price !== null && item.price !== undefined)
+            ? item.price
+            : (productMap[item.product_id]?.price || 0),
+          size: item.size || null,
         }))
       }
 
