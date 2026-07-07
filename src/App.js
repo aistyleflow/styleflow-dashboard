@@ -89,7 +89,7 @@ function App() {
     }
   }
 
-  // ✅ FIXED updateStatus — with stock logic
+  // ✅ FIXED updateStatus — correct stock logic
   async function updateStatus(orderId, newStatus) {
     try {
       // ✅ Step 1 — fetch current order to get oldStatus
@@ -107,7 +107,7 @@ function App() {
       const oldStatus = currentOrder.status
       console.log(`📦 Status change: ${oldStatus} → ${newStatus} for order ${orderId}`)
 
-      // ✅ Step 2 — fetch order items for stock update
+      // ✅ Step 2 — fetch order items
       const { data: orderItemsList, error: itemsError } = await supabase
         .from('order_items')
         .select('product_id, quantity')
@@ -118,21 +118,10 @@ function App() {
         return
       }
 
-      // ✅ Step 3 — call backend to update status + send WhatsApp
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, newStatus })
-      })
-
-      if (!response.ok) {
-        console.error("❌ Failed to update status via backend")
-        return
-      }
-
-      // ✅ CASE A — pending → confirmed: reduce stock
+      // ✅ Step 3 — apply stock rules first
       if (oldStatus === 'pending' && newStatus === 'confirmed') {
-        console.log("📉 Reducing stock for confirmed order:", orderId)
+        // ✅ CASE A — reduce stock
+        console.log("📉 Reducing stock — pending → confirmed, order:", orderId)
         for (const item of (orderItemsList || [])) {
           const { data: product } = await supabase
             .from('products')
@@ -146,14 +135,13 @@ function App() {
               .from('products')
               .update({ stock: newStock })
               .eq('id', item.product_id)
-            console.log(`📉 Product ${item.product_id}: stock ${product.stock} → ${newStock}`)
+            console.log(`📉 Product ${item.product_id}: ${product.stock} → ${newStock}`)
           }
         }
-      }
 
-      // ✅ CASE B — confirmed → cancelled: add stock back
-      else if (oldStatus === 'confirmed' && newStatus === 'cancelled') {
-        console.log("📈 Restoring stock for cancelled order:", orderId)
+      } else if (oldStatus === 'confirmed' && newStatus === 'cancelled') {
+        // ✅ CASE B — add stock back
+        console.log("📈 Restoring stock — confirmed → cancelled, order:", orderId)
         for (const item of (orderItemsList || [])) {
           const { data: product } = await supabase
             .from('products')
@@ -167,23 +155,33 @@ function App() {
               .from('products')
               .update({ stock: newStock })
               .eq('id', item.product_id)
-            console.log(`📈 Product ${item.product_id}: stock ${product.stock} → ${newStock}`)
+            console.log(`📈 Product ${item.product_id}: ${product.stock} → ${newStock}`)
           }
         }
-      }
 
-      // ✅ CASE C — confirmed → delivered: do nothing
-      else if (oldStatus === 'confirmed' && newStatus === 'delivered') {
-        console.log("✅ confirmed → delivered: no stock change needed")
-      }
+      } else if (oldStatus === 'confirmed' && newStatus === 'delivered') {
+        // ✅ CASE C — do nothing
+        console.log("✅ confirmed → delivered: no stock change")
 
-      // ✅ CASE D — pending → cancelled: do nothing
-      else if (oldStatus === 'pending' && newStatus === 'cancelled') {
-        console.log("✅ pending → cancelled: no stock change needed")
-      }
+      } else if (oldStatus === 'pending' && newStatus === 'cancelled') {
+        // ✅ CASE D — do nothing
+        console.log("✅ pending → cancelled: no stock change")
 
-      else {
+      } else {
         console.log(`ℹ️ ${oldStatus} → ${newStatus}: no stock rule applied`)
+      }
+
+      // ✅ Step 4 — call backend AFTER stock logic
+      // backend updates order status in DB + sends WhatsApp
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, newStatus })
+      })
+
+      if (!response.ok) {
+        console.error("❌ Failed to update status via backend")
+        return
       }
 
       fetchOrders(owner.id)
@@ -193,16 +191,15 @@ function App() {
     }
   }
 
+  // ✅ FIXED verifyPayment — calls updateStatus instead of directly setting confirmed
   async function verifyPayment(orderId) {
     try {
       setVerifying(prev => ({ ...prev, [orderId]: true }))
 
+      // ✅ Step 1 — mark payment as paid first
       const { error } = await supabase
         .from('orders')
-        .update({
-          payment_status: 'paid',
-          status: 'confirmed'
-        })
+        .update({ payment_status: 'paid' })
         .eq('id', orderId)
 
       if (error) {
@@ -210,13 +207,8 @@ function App() {
         return
       }
 
-      await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, newStatus: 'confirmed' })
-      })
-
-      fetchOrders(owner.id)
+      // ✅ Step 2 — call updateStatus so stock logic runs correctly
+      await updateStatus(orderId, 'confirmed')
 
     } catch (err) {
       console.error("❌ verifyPayment error:", err.message)
