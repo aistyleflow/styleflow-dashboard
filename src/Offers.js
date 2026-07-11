@@ -23,6 +23,7 @@ function Offers({ owner }) {
   useEffect(() => {
     fetchPastOffers()
     fetchCustomerCount('all')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   async function fetchPastOffers() {
