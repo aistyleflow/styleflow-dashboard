@@ -56,12 +56,13 @@ function Products({ owner }) {
   }
 
   // ✅ STEP 4 — upload function
-  async function uploadProductImage() {
-  if (!imageFile) return form.image_url || ''
+   {
+    async function uploadProductImage()
+      if (!imageFile) return form.image_url || ''
 
-  try {
-    setUploading(true)
-
+      try {
+        setUploading(true)
+    
     // Convert every uploaded image to JPG
     const img = new Image()
     img.src = URL.createObjectURL(imageFile)
@@ -82,6 +83,8 @@ function Products({ owner }) {
     )
 
     const fileName = `${owner.id}-${Date.now()}.jpg`
+    console.log("Uploading:", fileName);
+    console.log("Blob type:", jpgBlob.type);
     const filePath = `products/${fileName}`
 
     const { error: uploadError } = await supabase.storage
