@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './supabase.js'
 
 function Products({ owner }) {
@@ -8,7 +8,8 @@ function Products({ owner }) {
   const [editProduct, setEditProduct] = useState(null)
   const [saving, setSaving] = useState(false)
   const [imageFile, setImageFile] = useState(null)      // ✅ STEP 2
-  const [uploading, setUploading] = useState(false)     // ✅ STEP 2
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef(null)                     // ✅ STEP 2
   const [form, setForm] = useState({
     product_name: '',
     price: '',
@@ -142,6 +143,18 @@ function Products({ owner }) {
   }
 
   function handleCancel() {
+  function removeImage() {
+    setImageFile(null)
+
+    setForm(prev => ({
+      ...prev,
+      image_url: ''
+    }))
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }  
     setShowForm(false)
     setEditProduct(null)
     setImageFile(null)
@@ -264,6 +277,7 @@ function Products({ owner }) {
           <div style={styles.formField}>
             <label style={styles.label}>Product Image</label>
             <input
+              ref={fileInputRef}
               type="file"
               accept="image/*"
               onChange={handleImageChange}
@@ -285,6 +299,23 @@ function Products({ owner }) {
                   border: '1px solid #ddd'
                 }}
               />
+
+              <br /><br />
+
+              <button
+                type="button"
+                onClick={removeImage}
+                style={{
+                  background: "#F44336",
+                  color: "#fff",
+                  border: "none",
+                  padding: "8px 14px",
+                  borderRadius: "6px",
+                  cursor: "pointer"
+                }}
+              >
+                ❌ Remove Image
+              </button>
             </div>
           )}
 
