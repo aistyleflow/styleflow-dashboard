@@ -56,39 +56,59 @@ function Products({ owner }) {
 
   // ✅ STEP 4 — upload function
   async function uploadProductImage() {
-    if (!imageFile) return form.image_url || ''
+  if (!imageFile) return form.image_url || ''
 
-    try {
-      setUploading(true)
+  try {
+    setUploading(true)
 
-      const fileExt = imageFile.name.split('.').pop()
-      const fileName = `${owner.id}-${Date.now()}.${fileExt}`
-      const filePath = `products/${fileName}`
+    // Convert every uploaded image to JPG
+    const img = new Image()
+    img.src = URL.createObjectURL(imageFile)
 
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, imageFile)
+    await new Promise((resolve) => {
+      img.onload = resolve
+    })
 
-      if (uploadError) {
-        console.error('Upload error:', uploadError.message)
-        alert('Image upload failed')
-        return ''
-      }
+    const canvas = document.createElement("canvas")
+    canvas.width = img.width
+    canvas.height = img.height
 
-      const { data } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath)
+    const ctx = canvas.getContext("2d")
+    ctx.drawImage(img, 0, 0)
 
-      return data.publicUrl
-    } catch (err) {
-      console.error(err)
-      alert('Image upload failed')
-      return ''
-    } finally {
-      setUploading(false)
+    const jpgBlob = await new Promise(resolve =>
+      canvas.toBlob(resolve, "image/jpeg", 0.95)
+    )
+
+    const fileName = `${owner.id}-${Date.now()}.jpg`
+    const filePath = `products/${fileName}`
+
+    const { error: uploadError } = await supabase.storage
+      .from("product-images")
+      .upload(filePath, jpgBlob, {
+        contentType: "image/jpeg"
+      })
+
+    if (uploadError) {
+      console.error(uploadError)
+      alert("Image upload failed")
+      return ""
     }
-  }
 
+    const { data } = supabase.storage
+      .from("product-images")
+      .getPublicUrl(filePath)
+
+    return data.publicUrl
+
+  } catch (err) {
+    console.error(err)
+    alert("Image upload failed")
+    return ""
+  } finally {
+    setUploading(false)
+  }
+}
   // ✅ STEP 6 — reset imageFile when Add opens
   function handleAddClick() {
     setEditProduct(null)
