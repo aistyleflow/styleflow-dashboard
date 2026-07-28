@@ -143,7 +143,7 @@ function Products({ owner }) {
   }
 
   function handleCancel() {
-  function removeImage() {
+    function removeImage() {
     setImageFile(null)
 
     setForm(prev => ({
