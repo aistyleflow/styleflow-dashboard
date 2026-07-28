@@ -142,8 +142,7 @@ function Products({ owner }) {
     setShowForm(true)
   }
 
-  function handleCancel() {
-    function removeImage() {
+  function removeImage() {
     setImageFile(null)
 
     setForm(prev => ({
@@ -154,7 +153,8 @@ function Products({ owner }) {
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
-  }  
+  }
+  function handleCancel() {  
     setShowForm(false)
     setEditProduct(null)
     setImageFile(null)
