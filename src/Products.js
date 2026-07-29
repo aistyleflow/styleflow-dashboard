@@ -56,8 +56,7 @@ function Products({ owner }) {
   }
 
   // ✅ STEP 4 — upload function
-   {
-    async function uploadProductImage()
+    async function uploadProductImage() { 
       if (!imageFile) return form.image_url || ''
 
       try {
