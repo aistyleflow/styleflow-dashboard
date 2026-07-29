@@ -237,7 +237,7 @@ function Sales({ owner }) {
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [activeFilter, setActiveFilter] = useState('30days')
-  const [orderItems, setOrderItems] = useState([])
+  const [orderItems, setOrderItems] = useState({})
 
   // ─── Fetch Orders ──────────────────────────────────────────────────────────
 
@@ -264,8 +264,6 @@ function Sales({ owner }) {
           .select('order_id, product_id, quantity, product_name, price')
           .in('order_id', orderIds)
         setOrderItems(items || [])
-      } else {
-        setOrderItems([])
       }
 
     } catch (err) {
@@ -442,7 +440,8 @@ function Sales({ owner }) {
     const deliveredIds = new Set(
       orders.filter(o => o.status === 'delivered').map(o => o.id)
     )
-    orderItems
+    const itemsArray = Array.isArray(orderItems) ? orderItems : []
+    itemsArray
       .filter(item => deliveredIds.has(item.order_id))
       .forEach(item => {
         const name = item.product_name || `Product #${item.product_id}`
