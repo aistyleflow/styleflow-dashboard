@@ -799,7 +799,7 @@ function Sales({ owner }) {
                   <tr key={order.id} style={styles.tr}>
                     <td style={styles.td}>
                       <span style={{ fontFamily: 'monospace', color: '#999' }}>
-                        #{order.store_order_number || order.id}
+                        {order.store_order_number ? `#${order.store_order_number}` : 'N/A'}
                       </span>
                     </td>
                     <td style={styles.td}>{order.customer_name || 'N/A'}</td>
