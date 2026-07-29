@@ -231,7 +231,6 @@ function Sales({ owner }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
-  const [revenueFilter, setRevenueFilter] = useState('30days')
   const [chartTab, setChartTab] = useState('revenue')
   const [chartRange, setChartRange] = useState('30days')
   const [customStart, setCustomStart] = useState('')
