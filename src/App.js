@@ -6,6 +6,7 @@ import Settings from './Settings.js'
 import Customers from './Customers.js'
 import Offers from './Offers.js'
 import PaymentSettings from './PaymentSettings.js'
+import Sales from './Sales.js'
 
 function App() {
   const [orders, setOrders] = useState([])
@@ -302,6 +303,7 @@ function App() {
           { key: 'products',        label: '📦 Products'         },
           { key: 'customers',       label: '👥 Customers'        },
           { key: 'offers',          label: '🎁 Offers'           },
+          { key: 'sales',           label: '📊 Sales'            },
           { key: 'paymentsettings', label: '💳 Payment Settings' },
           { key: 'settings',        label: '⚙️ Settings'         },
         ].map((tab) => (
@@ -514,6 +516,11 @@ function App() {
       {/* ✅ Offers Tab */}
       {activeTab === 'offers' && (
         <Offers owner={owner} />
+      )}
+
+      {/* ✅ Sales Tab */}
+      {activeTab === 'sales' && (
+        <Sales owner={owner} />
       )}
 
       {/* ✅ Payment Settings Tab */}
