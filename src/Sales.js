@@ -231,12 +231,13 @@ function Sales({ owner }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [search, setSearch] = useState('')
+  const [revenueFilter, setRevenueFilter] = useState('30days')
   const [chartTab, setChartTab] = useState('revenue')
   const [chartRange, setChartRange] = useState('30days')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [activeFilter, setActiveFilter] = useState('30days')
-  const [orderItems, setOrderItems] = useState({})
+  const [orderItems, setOrderItems] = useState([])
 
   // ─── Fetch Orders ──────────────────────────────────────────────────────────
 
@@ -263,6 +264,8 @@ function Sales({ owner }) {
           .select('order_id, product_id, quantity, product_name, price')
           .in('order_id', orderIds)
         setOrderItems(items || [])
+      } else {
+        setOrderItems([])
       }
 
     } catch (err) {
