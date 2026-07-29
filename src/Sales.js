@@ -237,6 +237,7 @@ function Sales({ owner }) {
   const [customEnd, setCustomEnd] = useState('')
   const [activeFilter, setActiveFilter] = useState('30days')
   const [orderItems, setOrderItems] = useState({})
+  const [productNameMap, setProductNameMap] = useState({})
 
   // ─── Fetch Orders ──────────────────────────────────────────────────────────
 
@@ -263,6 +264,19 @@ function Sales({ owner }) {
           .select('order_id, product_id, quantity, product_name, price')
           .in('order_id', orderIds)
         setOrderItems(items || [])
+
+        const productIds = [...new Set((items || []).map(i => i.product_id).filter(Boolean))]
+        if (productIds.length > 0) {
+          const { data: products } = await supabase
+            .from('products')
+            .select('id, product_name')
+            .in('id', productIds)
+          const map = {}
+          ;(products || []).forEach(p => { map[p.id] = p.product_name })
+          setProductNameMap(map)
+        } else {
+          setProductNameMap({})
+        }
       }
 
     } catch (err) {
@@ -443,7 +457,7 @@ function Sales({ owner }) {
     itemsArray
       .filter(item => deliveredIds.has(item.order_id))
       .forEach(item => {
-        const name = item.product_name || `Product #${item.product_id}`
+        const name = item.product_name || productNameMap[item.product_id] || `Product #${item.product_id}`
         if (!map[name]) map[name] = { name, units: 0, revenue: 0 }
         map[name].units += item.quantity || 1
         map[name].revenue += (item.price || 0) * (item.quantity || 1)
@@ -452,7 +466,7 @@ function Sales({ owner }) {
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 10)
       .map((item, i) => ({ ...item, rank: i + 1 }))
-  }, [orders, orderItems])
+  }, [orders, orderItems, productNameMap])
 
   // ─── Insights ─────────────────────────────────────────────────────────────
 
