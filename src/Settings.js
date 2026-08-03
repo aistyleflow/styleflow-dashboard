@@ -1,5 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { QRCodeCanvas } from 'qrcode.react'
 import { supabase } from './supabase.js'
+
+// ✅ Change 6 — StyleFlow WhatsApp number constant (update this in one place if it ever changes)
+const STYLEFLOW_NUMBER = "919876543210"
 
 function Settings({ owner }) {
   // ✅ Change 1 — added logo_url to form state
@@ -19,8 +23,35 @@ function Settings({ owner }) {
   const [error, setError] = useState(null)
   const [usage, setUsage] = useState(null)
   const [usageLoading, setUsageLoading] = useState(true)
+  const [copySuccess, setCopySuccess] = useState(false)
+  const qrRef = useRef(null)
 
   const storeId = owner.id
+  // ✅ Change 7 — WhatsApp link always generated from owner.store_code, never hardcoded
+  const whatsappLink = owner?.store_code
+    ? `https://wa.me/${STYLEFLOW_NUMBER}?text=${owner.store_code}`
+    : ''
+
+  function handleCopyLink() {
+    if (!whatsappLink) return
+    navigator.clipboard.writeText(whatsappLink)
+      .then(() => {
+        setCopySuccess(true)
+        setTimeout(() => setCopySuccess(false), 3000)
+      })
+      .catch(() => {})
+  }
+
+  function handleDownloadQR() {
+    if (!owner?.store_code || !qrRef.current) return
+    const canvas = qrRef.current.querySelector('canvas')
+    if (!canvas) return
+    const url = canvas.toDataURL('image/png')
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `styleflow-${owner.store_code}.png`
+    a.click()
+  }
 
   useEffect(() => {
     fetchSettings()
@@ -369,6 +400,55 @@ function Settings({ owner }) {
 
       </div>
 
+      {/* ✅ Change 8 — Customer QR & WhatsApp Access section */}
+      <div style={styles.qrCard}>
+        <h3 style={styles.usageTitle}>📱 Customer QR & WhatsApp Access</h3>
+
+        <div style={styles.formField}>
+          <label style={styles.label}>🔑 Store Code</label>
+          <input
+            style={{ ...styles.input, backgroundColor: '#f0f0f0', color: '#999' }}
+            type="text"
+            value={owner?.store_code || 'Store code not available'}
+            readOnly
+          />
+        </div>
+
+        {!owner?.store_code ? (
+          <div style={styles.usageEmpty}>
+            <p style={styles.usageEmptyText}>Please configure your store code first.</p>
+          </div>
+        ) : (
+          <>
+            <div style={styles.formField}>
+              <label style={styles.label}>💬 WhatsApp Link</label>
+              <input
+                style={{ ...styles.input, backgroundColor: '#f0f0f0', color: '#333' }}
+                type="text"
+                value={whatsappLink}
+                readOnly
+              />
+              <button style={styles.refreshUsageBtn} onClick={handleCopyLink}>
+                📋 Copy Link
+              </button>
+              {copySuccess && (
+                <p style={{ ...styles.hint, color: '#2e7d32', fontWeight: 'bold' }}>
+                  Link copied successfully.
+                </p>
+              )}
+            </div>
+
+            <div style={styles.qrPreviewBox} ref={qrRef}>
+              <QRCodeCanvas value={whatsappLink} size={160} includeMargin />
+            </div>
+
+            <button style={styles.saveBtn} onClick={handleDownloadQR}>
+              ⬇ Download QR
+            </button>
+          </>
+        )}
+      </div>
+
     </div>
   )
 }
@@ -573,6 +653,26 @@ const styles = {
     border: '1px solid #ddd',
     backgroundColor: '#fff',
     padding: '6px',
+  },
+  // ✅ Change 9 — QR card + preview styles, matching existing card design language
+  qrCard: {
+    backgroundColor: '#fff',
+    borderRadius: '12px',
+    padding: '24px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+    marginTop: '20px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '20px',
+  },
+  qrPreviewBox: {
+    marginTop: '4px',
+    padding: '20px',
+    backgroundColor: '#f9f9f9',
+    borderRadius: '10px',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   saveBtn: {
     padding: '14px',
