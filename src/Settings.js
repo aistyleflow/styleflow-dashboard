@@ -3,7 +3,7 @@ import { QRCodeCanvas } from 'qrcode.react'
 import { supabase } from './supabase.js'
 
 // ✅ Change 6 — StyleFlow WhatsApp number constant (update this in one place if it ever changes)
-const STYLEFLOW_NUMBER = "919876543210"
+const STYLEFLOW_NUMBER = "918122786563"
 
 function Settings({ owner }) {
   // ✅ Change 1 — added logo_url to form state
