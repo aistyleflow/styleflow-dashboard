@@ -114,40 +114,7 @@ function Settings({ owner }) {
       setError(null)
       setSuccess(false)
 
-      const cleanStoreCode = storeCode.trim().toUpperCase()
-
-      if (!cleanStoreCode) {
-        setError('Store code cannot be empty')
-        setSaving(false)
-        return
-      }
-
-      if (!/^[A-Z0-9_]+$/.test(cleanStoreCode)) {
-        setError('Store code can only contain letters, numbers, and underscores (e.g. ROYALWEAR)')
-        setSaving(false)
-        return
-      }
-
-      const { data: existing, error: checkError } = await supabase
-        .from('shop_owners')
-        .select('id')
-        .eq('store_code', cleanStoreCode)
-        .neq('id', storeId)
-        .maybeSingle()
-
-      if (checkError) {
-        setError(checkError.message)
-        setSaving(false)
-        return
-      }
-
-      if (existing) {
-        setError(`Store code "${cleanStoreCode}" is already taken. Please choose a different one.`)
-        setSaving(false)
-        return
-      }
-
-      // ✅ Change 3 — added logo_url to update
+      // ✅ Change 3 — added logo_url to update (store_code is no longer editable, so it is not sent)
       const { error: saveError } = await supabase
         .from('shop_owners')
         .update({
@@ -156,8 +123,7 @@ function Settings({ owner }) {
           address:     form.address,
           instagram:   form.instagram,
           description: form.description,
-          logo_url:    form.logo_url,
-          store_code:  cleanStoreCode
+          logo_url:    form.logo_url
         })
         .eq('id', storeId)
 
@@ -166,9 +132,8 @@ function Settings({ owner }) {
         return
       }
 
-      setStoreCode(cleanStoreCode)
       setSuccess(true)
-      console.log('✅ Settings saved — store code:', cleanStoreCode)
+      console.log('✅ Settings saved')
       setTimeout(() => setSuccess(false), 3000)
 
     } catch (err) {
@@ -367,15 +332,15 @@ function Settings({ owner }) {
           />
         </div>
 
-        {/* Store Code */}
+        {/* Store Code — visible but read-only (cannot be edited) */}
         <div style={styles.formField}>
           <label style={styles.label}>🔑 Store Code</label>
           <input
-            style={styles.input}
+            style={{ ...styles.input, backgroundColor: '#f0f0f0', color: '#999' }}
             type="text"
             placeholder="e.g. ROYALWEAR"
             value={storeCode}
-            onChange={(e) => setStoreCode(e.target.value.toUpperCase())}
+            readOnly
           />
           <p style={styles.hint}>
             Customers will type this code to access your store on WhatsApp.
