@@ -3,7 +3,7 @@ import { QRCodeCanvas } from 'qrcode.react'
 import { supabase } from './supabase.js'
 
 // ✅ Change 6 — StyleFlow WhatsApp number constant (update this in one place if it ever changes)
-const STYLEFLOW_NUMBER = "918122786563"
+const STYLEFLOW_NUMBER = "919876543210"
 
 function Settings({ owner }) {
   // ✅ Change 1 — added logo_url to form state
@@ -12,8 +12,6 @@ function Settings({ owner }) {
     owner_name: '',
     phone_number: '',
     address: '',
-    instagram: '',
-    description: '',
     logo_url: ''
   })
   const [storeCode, setStoreCode] = useState('')
@@ -81,8 +79,6 @@ function Settings({ owner }) {
           owner_name:   data.owner_name   || '',
           phone_number: data.phone_number || '',
           address:      data.address      || '',
-          instagram:    data.instagram    || '',
-          description:  data.description  || '',
           logo_url:     data.logo_url     || ''
         })
         setStoreCode(data.store_code || '')
@@ -152,8 +148,6 @@ function Settings({ owner }) {
           shop_name:   form.shop_name,
           owner_name:  form.owner_name,
           address:     form.address,
-          instagram:   form.instagram,
-          description: form.description,
           logo_url:    form.logo_url
         })
         .eq('id', storeId)
@@ -308,20 +302,7 @@ function Settings({ owner }) {
           />
         </div>
 
-        {/* Instagram */}
-        <div style={styles.formField}>
-          <label style={styles.label}>📸 Instagram</label>
-          <input
-            style={styles.input}
-            type="text"
-            name="instagram"
-            placeholder="e.g. @yourstorename"
-            value={form.instagram}
-            onChange={handleChange}
-          />
-        </div>
-
-        {/* ✅ Change 4 — Logo URL field after Instagram, before Description */}
+{/* ✅ Change 4 — Logo URL field after Instagram, before Description */}
         <div style={styles.formField}>
           <label style={styles.label}>🖼️ Store Logo URL</label>
           <input
@@ -348,19 +329,6 @@ function Settings({ owner }) {
               />
             </div>
           )}
-        </div>
-
-        {/* Description */}
-        <div style={styles.formField}>
-          <label style={styles.label}>📝 Store Description</label>
-          <textarea
-            style={styles.textarea}
-            name="description"
-            placeholder="Describe your store..."
-            value={form.description}
-            onChange={handleChange}
-            rows={4}
-          />
         </div>
 
         {/* Store Code — visible but read-only (cannot be edited) */}
@@ -608,16 +576,6 @@ const styles = {
     fontSize: '14px',
     outline: 'none',
     backgroundColor: '#fafafa',
-  },
-  textarea: {
-    padding: '12px 16px',
-    borderRadius: '8px',
-    border: '1px solid #ddd',
-    fontSize: '14px',
-    outline: 'none',
-    backgroundColor: '#fafafa',
-    resize: 'vertical',
-    fontFamily: 'Arial, sans-serif',
   },
   hint: {
     margin: '4px 0 0',
