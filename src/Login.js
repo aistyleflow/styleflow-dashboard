@@ -44,6 +44,12 @@ function Login({ onLoginSuccess }) {
         return
       }
 
+      // ✅ Subscription access control — blocks cancelled/expired accounts before granting dashboard access
+      if (data.subscription_status === 'cancelled' || data.subscription_status === 'expired') {
+        setError("Your StyleFlow subscription is inactive. Please renew your plan to continue using the dashboard.")
+        return
+      }
+
       localStorage.setItem('store_id', String(data.id))
       localStorage.setItem('styleflow_owner', JSON.stringify(data))
 
