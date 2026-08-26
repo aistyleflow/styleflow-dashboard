@@ -43,7 +43,8 @@ function App() {
         .from('orders')
         .select('*')
         .eq('store_id', Number(storeId))
-        .order('store_order_number', { ascending: true })
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
 
       if (ordersError) {
         setError(ordersError.message)
