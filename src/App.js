@@ -220,21 +220,24 @@ function App() {
     }
   }
 
-  async function verifyPayment(orderId) {
+  async function verifyPayment(orderId, action) {
     try {
       setVerifying(prev => ({ ...prev, [orderId]: true }))
 
-      const { error } = await supabase
-        .from('orders')
-        .update({ payment_status: 'paid' })
-        .eq('id', orderId)
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/verify-payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, storeId: owner.id, action })
+      })
 
-      if (error) {
-        console.error("❌ Verify payment error:", error.message)
+      const result = await response.json()
+
+      if (!response.ok) {
+        console.error("❌ Verify payment error:", result.error)
         return
       }
 
-      await updateStatus(orderId, 'confirmed')
+      fetchOrders(owner.id)
 
     } catch (err) {
       console.error("❌ verifyPayment error:", err.message)
@@ -242,7 +245,6 @@ function App() {
       setVerifying(prev => ({ ...prev, [orderId]: false }))
     }
   }
-
   function getStatusColor(status) {
     switch (status) {
       case 'pending':   return '#FFA500'
@@ -420,17 +422,37 @@ function App() {
                     </p>
 
                     {order.payment_method === 'UPI' &&
-                     order.payment_status === 'awaiting_verification' && (
-                      <button
-                        style={{
-                          ...styles.verifyBtn,
-                          opacity: verifying[order.id] ? 0.7 : 1,
-                        }}
-                        onClick={() => verifyPayment(order.id)}
-                        disabled={verifying[order.id]}
-                      >
-                        {verifying[order.id] ? '⏳ Verifying...' : '✅ Verify Payment'}
-                      </button>
+                     order.payment_status === 'payment_claimed' && (
+                      <div style={styles.btnRow}>
+                        <button
+                          style={{
+                            ...styles.verifyBtn,
+                            opacity: verifying[order.id] ? 0.7 : 1,
+                          }}
+                          onClick={() => verifyPayment(order.id, 'received')}
+                          disabled={verifying[order.id]}
+                        >
+                          {verifying[order.id] ? '⏳ Verifying...' : '✅ Payment Received'}
+                        </button>
+                        <button
+                          style={{
+                            ...styles.verifyBtn,
+                            backgroundColor: '#F44336',
+                            opacity: verifying[order.id] ? 0.7 : 1,
+                          }}
+                          onClick={() => verifyPayment(order.id, 'not_received')}
+                          disabled={verifying[order.id]}
+                        >
+                          ❌ Not Received
+                        </button>
+                      </div>
+                    )}
+
+                    {order.payment_method === 'UPI' &&
+                     order.payment_status === 'payment_claimed' && (
+                      <p style={{ fontSize: '12px', color: '#FF9800', fontWeight: 'bold', marginTop: '6px' }}>
+                        ⏳ Payment Verification Pending
+                      </p>
                     )}
                   </div>
 
