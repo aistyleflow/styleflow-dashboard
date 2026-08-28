@@ -261,10 +261,33 @@ function App() {
   }
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} className="sf-container">
+      <style>{`
+        @media (max-width: 768px) {
+          * { box-sizing: border-box; }
+          html, body { overflow-x: hidden; max-width: 100%; }
+          .sf-container { padding: 12px !important; }
+          .sf-header { flex-direction: column; align-items: flex-start !important; gap: 10px; padding: 12px !important; }
+          .sf-header-right { width: 100%; justify-content: space-between !important; gap: 8px !important; }
+          .sf-store-info-box { max-width: calc(100vw - 100px); }
+          .sf-title { font-size: 18px !important; word-break: break-word; }
+          .sf-store-info { font-size: 12px !important; word-break: break-word; }
+          .sf-owner-name { font-size: 12px !important; }
+          .sf-refresh-btn, .sf-logout-btn { padding: 6px 10px !important; font-size: 12px !important; }
+          .sf-tab-bar { gap: 6px !important; }
+          .sf-tab-btn { padding: 8px 12px !important; font-size: 12px !important; flex: 1 1 auto; }
+          .sf-stats-bar { flex-wrap: wrap !important; gap: 8px !important; }
+          .sf-stat-card { flex: 1 1 calc(50% - 8px) !important; min-width: calc(50% - 8px); padding: 10px !important; }
+          .sf-stat-number { font-size: 20px !important; }
+          .sf-order-card { padding: 12px !important; }
+          .sf-customer-details p, .sf-payment-details p, .sf-item-row { word-break: break-word; overflow-wrap: break-word; }
+          .sf-btn-row { gap: 6px !important; }
+          .sf-status-btn, .sf-verify-btn { padding: 6px 10px !important; font-size: 11px !important; }
+        }
+      `}</style>
 
       {/* ✅ Header */}
-      <div style={styles.header}>
+      <div style={styles.header} className="sf-header">
         <div style={styles.storeHeaderRow}>
           {owner.logo_url ? (
             <img
@@ -276,31 +299,32 @@ function App() {
           ) : (
             <span style={styles.storeLogoFallback}>🏪</span>
           )}
-          <div style={styles.storeInfoBox}>
-            <h1 style={styles.title}>🛍️ StyleFlow Dashboard</h1>
-            <p style={styles.storeInfo}>
+          <div style={styles.storeInfoBox} className="sf-store-info-box">
+            <h1 style={styles.title} className="sf-title">🛍️ StyleFlow Dashboard</h1>
+            <p style={styles.storeInfo} className="sf-store-info">
               {owner.shop_name} — Store ID: {owner.id}
             </p>
           </div>
         </div>
-        <div style={styles.headerRight}>
-          <span style={styles.ownerName}>
+        <div style={styles.headerRight} className="sf-header-right">
+          <span style={styles.ownerName} className="sf-owner-name">
             👤 {owner.owner_name || owner.phone_number}
           </span>
           <button
             style={styles.refreshBtn}
+            className="sf-refresh-btn"
             onClick={() => fetchOrders(owner.id)}
           >
             🔄 Refresh
           </button>
-          <button style={styles.logoutBtn} onClick={handleLogout}>
+          <button style={styles.logoutBtn} className="sf-logout-btn" onClick={handleLogout}>
             🚪 Logout
           </button>
         </div>
       </div>
 
       {/* ✅ Tab Bar */}
-      <div style={styles.tabBar}>
+      <div style={styles.tabBar} className="sf-tab-bar">
         {[
           { key: 'orders',          label: '📋 Orders'           },
           { key: 'products',        label: '📦 Products'         },
@@ -310,8 +334,9 @@ function App() {
           { key: 'paymentsettings', label: '💳 Payment Settings' },
           { key: 'settings',        label: '⚙️ Settings'         },
         ].map((tab) => (
-          <button
+         <button
             key={tab.key}
+            className="sf-tab-btn"
             style={{
               ...styles.tabBtn,
               backgroundColor: activeTab === tab.key ? '#4CAF50' : '#f0f0f0',
@@ -327,7 +352,7 @@ function App() {
       {/* ✅ Orders Tab */}
       {activeTab === 'orders' && (
         <>
-          <div style={styles.statsBar}>
+          <div style={styles.statsBar} className="sf-stats-bar">
             {[
               { label: 'Total Orders',  value: orders.length,                                         color: '#333'    },
               { label: '⏳ Pending',    value: orders.filter(o => o.status === 'pending').length,   color: '#FFA500' },
@@ -335,8 +360,8 @@ function App() {
               { label: '🚚 Shipped',    value: orders.filter(o => o.status === 'shipped').length,   color: '#9C27B0' },
               { label: '📦 Delivered',  value: orders.filter(o => o.status === 'delivered').length, color: '#4CAF50' },
             ].map((stat) => (
-              <div key={stat.label} style={styles.statCard}>
-                <span style={{ ...styles.statNumber, color: stat.color }}>{stat.value}</span>
+              <div key={stat.label} style={styles.statCard} className="sf-stat-card">
+                <span style={{ ...styles.statNumber, color: stat.color }} className="sf-stat-number">{stat.value}</span>
                 <span style={styles.statLabel}>{stat.label}</span>
               </div>
             ))}
@@ -369,7 +394,7 @@ function App() {
           {!loading && !error && orders.length > 0 && (
             <div style={styles.ordersList}>
               {orders.map((order) => (
-                <div key={order.id} style={styles.orderCard}>
+                <div key={order.id} style={styles.orderCard} className="sf-order-card">
 
                   <div style={styles.orderHeader}>
                     <div>
@@ -397,14 +422,14 @@ function App() {
                   </div>
 
                   {/* ✅ Customer Details */}
-                  <div style={styles.customerDetails}>
+                  <div style={styles.customerDetails} className="sf-customer-details">
                     <p>👤 <strong>{order.customer_name || 'N/A'}</strong></p>
                     <p>📱 {order.phone_number}</p>
                     <p>📍 {order.customer_address || 'N/A'}</p>
-                  </div>
+                  </div>                  
 
                   {/* ✅ Payment Details */}
-                  <div style={styles.paymentDetails}>
+                  <div style={styles.paymentDetails} className="sf-payment-details">
                     <p>
                       💳 <strong>Payment:</strong>{' '}
                       {order.payment_method || 'N/A'}
@@ -423,8 +448,9 @@ function App() {
 
                     {order.payment_method === 'UPI' &&
                      order.payment_status === 'payment_claimed' && (
-                      <div style={styles.btnRow}>
+                      <div style={styles.btnRow} className="sf-btn-row">
                         <button
+                          className="sf-verify-btn"
                           style={{
                             ...styles.verifyBtn,
                             opacity: verifying[order.id] ? 0.7 : 1,
@@ -435,6 +461,7 @@ function App() {
                           {verifying[order.id] ? '⏳ Verifying...' : '✅ Payment Received'}
                         </button>
                         <button
+                          className="sf-verify-btn"
                           style={{
                             ...styles.verifyBtn,
                             backgroundColor: '#F44336',
