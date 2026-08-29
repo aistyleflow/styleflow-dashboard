@@ -23,6 +23,7 @@ function Settings({ owner }) {
   const [usageLoading, setUsageLoading] = useState(true)
   const [copySuccess, setCopySuccess] = useState(false)
   const qrRef = useRef(null)
+  const phoneNumberOriginal = useRef('')
 
   const storeId = owner.id
   // ✅ Change 7 — WhatsApp link always generated from owner.store_code, never hardcoded
@@ -81,6 +82,7 @@ function Settings({ owner }) {
           address:      data.address      || '',
           logo_url:     data.logo_url     || ''
         })
+        phoneNumberOriginal.current = data.phone_number || ''
         setStoreCode(data.store_code || '')
       }
 
@@ -142,13 +144,35 @@ function Settings({ owner }) {
       setSuccess(false)
 
       // ✅ Change 3 — added logo_url to update (store_code is no longer editable, so it is not sent)
+      const cleanPhone = form.phone_number.trim()
+
+      // If phone number changed, check it isn't already used by another account
+      if (cleanPhone !== phoneNumberOriginal.current) {
+        const { data: existing, error: checkError } = await supabase
+          .from('shop_owners')
+          .select('id')
+          .eq('phone_number', cleanPhone)
+          .neq('id', storeId)
+          .maybeSingle()
+
+        if (checkError) {
+          setError(checkError.message)
+          return
+        }
+        if (existing) {
+          setError('This phone number is already registered to another StyleFlow account.')
+          return
+        }
+      }
+
       const { error: saveError } = await supabase
         .from('shop_owners')
         .update({
-          shop_name:   form.shop_name,
-          owner_name:  form.owner_name,
-          address:     form.address,
-          logo_url:    form.logo_url
+          shop_name:    form.shop_name,
+          owner_name:   form.owner_name,
+          address:      form.address,
+          logo_url:     form.logo_url,
+          phone_number: cleanPhone
         })
         .eq('id', storeId)
 
@@ -156,6 +180,11 @@ function Settings({ owner }) {
         setError(saveError.message)
         return
       }
+
+      // Keep local session in sync with new phone number
+      phoneNumberOriginal.current = cleanPhone
+      const updatedOwner = { ...owner, phone_number: cleanPhone, shop_name: form.shop_name, owner_name: form.owner_name, address: form.address, logo_url: form.logo_url }
+      localStorage.setItem('styleflow_owner', JSON.stringify(updatedOwner))
 
       setSuccess(true)
       console.log('✅ Settings saved')
@@ -276,17 +305,18 @@ function Settings({ owner }) {
           />
         </div>
 
-        {/* WhatsApp Number — read only */}
+        {/* WhatsApp Number — editable, also the login identity */}
         <div style={styles.formField}>
           <label style={styles.label}>📱 WhatsApp Number</label>
           <input
-            style={{ ...styles.input, backgroundColor: '#f0f0f0', color: '#999' }}
+            style={styles.input}
             type="text"
             name="phone_number"
+            placeholder="Enter your phone number"
             value={form.phone_number}
-            readOnly
+            onChange={handleChange}
           />
-          <p style={styles.hint}>Phone number cannot be changed</p>
+          <p style={styles.hint}>This is also your login number — changing it updates how you log in.</p>
         </div>
 
         {/* Address */}
