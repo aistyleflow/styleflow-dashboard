@@ -165,7 +165,7 @@ function Settings({ owner }) {
         }
       }
 
-      const { error: saveError } = await supabase
+      const { data: savedRows, error: saveError } = await supabase
         .from('shop_owners')
         .update({
           shop_name:    form.shop_name,
@@ -175,9 +175,15 @@ function Settings({ owner }) {
           phone_number: cleanPhone
         })
         .eq('id', storeId)
+        .select()
 
       if (saveError) {
         setError(saveError.message)
+        return
+      }
+
+      if (!savedRows || savedRows.length === 0) {
+        setError('Save blocked: no matching row was updated. This is likely a database permissions (RLS) issue, not a form issue.')
         return
       }
 
