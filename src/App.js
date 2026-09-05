@@ -210,7 +210,10 @@ function App() {
         return
       }
 
-      fetchOrders(owner.id)
+      // ✅ Update only the affected order locally instead of re-fetching everything
+      setOrders(prevOrders => prevOrders.map(o =>
+        o.id === orderId ? { ...o, status: newStatus } : o
+      ))
 
     } catch (err) {
       console.error("❌ updateStatus error:", err.message)
@@ -237,7 +240,14 @@ function App() {
         return
       }
 
-      fetchOrders(owner.id)
+      // ✅ Update only the affected order locally instead of re-fetching everything
+      setOrders(prevOrders => prevOrders.map(o => {
+        if (o.id !== orderId) return o
+        if (action === 'received') {
+          return { ...o, payment_status: 'paid', status: 'confirmed' }
+        }
+        return { ...o, payment_status: 'not_received' }
+      }))
 
     } catch (err) {
       console.error("❌ verifyPayment error:", err.message)
