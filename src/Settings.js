@@ -144,6 +144,10 @@ function Settings({ owner }) {
   }
 
 
+  function handleChange(e) {
+    setForm({ ...form, [e.target.name]: e.target.value })
+  }
+
   function handlePwChange(e) {
     setPwForm({ ...pwForm, [e.target.name]: e.target.value })
   }
