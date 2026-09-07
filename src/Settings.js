@@ -25,6 +25,16 @@ function Settings({ owner }) {
   const qrRef = useRef(null)
   const phoneNumberOriginal = useRef('')
 
+  // Password change state (kept fully separate from the profile `form` state)
+  const [pwForm, setPwForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  })
+  const [pwSaving, setPwSaving] = useState(false)
+  const [pwSuccess, setPwSuccess] = useState(false)
+  const [pwError, setPwError] = useState(null)
+
   const storeId = owner.id
   // ✅ Change 7 — WhatsApp link always generated from owner.store_code, never hardcoded
   const whatsappLink = owner?.store_code
@@ -133,8 +143,80 @@ function Settings({ owner }) {
     })
   }
 
-  function handleChange(e) {
-    setForm({ ...form, [e.target.name]: e.target.value })
+
+  function handlePwChange(e) {
+    setPwForm({ ...pwForm, [e.target.name]: e.target.value })
+  }
+
+  async function handleChangePassword() {
+    setPwError(null)
+    setPwSuccess(false)
+
+    const { currentPassword, newPassword, confirmPassword } = pwForm
+
+    if (!currentPassword.trim()) {
+      setPwError('Current password is required.')
+      return
+    }
+    if (!newPassword.trim()) {
+      setPwError('New password is required.')
+      return
+    }
+    if (!confirmPassword.trim()) {
+      setPwError('Please confirm your new password.')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPwError('New Password and Confirm Password do not match.')
+      return
+    }
+
+    try {
+      setPwSaving(true)
+
+      // Verify current password against the existing password mechanism
+      const { data: match, error: verifyError } = await supabase
+        .from('shop_owners')
+        .select('id')
+        .eq('id', storeId)
+        .eq('password', currentPassword.trim())
+        .maybeSingle()
+
+      if (verifyError) {
+        setPwError('Could not verify current password. Please try again.')
+        return
+      }
+
+      if (!match) {
+        setPwError('Current password is incorrect.')
+        return
+      }
+
+      const { data: updatedRows, error: updateError } = await supabase
+        .from('shop_owners')
+        .update({ password: newPassword.trim() })
+        .eq('id', storeId)
+        .select()
+
+      if (updateError) {
+        setPwError('Failed to change password. Please try again.')
+        return
+      }
+
+      if (!updatedRows || updatedRows.length === 0) {
+        setPwError('Password change blocked: no matching row was updated.')
+        return
+      }
+
+      setPwForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+      setPwSuccess(true)
+      setTimeout(() => setPwSuccess(false), 3000)
+
+    } catch (err) {
+      setPwError('Failed to change password. Please try again.')
+    } finally {
+      setPwSaving(false)
+    }
   }
 
   async function handleSave() {
@@ -402,6 +484,70 @@ function Settings({ owner }) {
           {saving ? '⏳ Saving...' : '💾 Save Settings'}
         </button>
 
+      </div>
+
+      {/* 🔐 Change Password section — separate from Save Settings */}
+      <div style={styles.formBox}>
+        <h3 style={styles.usageTitle}>🔐 Change Password</h3>
+
+        {pwSuccess && (
+          <div style={styles.successBox}>
+            ✅ Password changed successfully.
+          </div>
+        )}
+
+        {pwError && (
+          <div style={styles.errorBox}>
+            ❌ {pwError}
+          </div>
+        )}
+
+        <div style={styles.formField}>
+          <label style={styles.label}>Current Password</label>
+          <input
+            style={styles.input}
+            type="password"
+            name="currentPassword"
+            placeholder="Enter current password"
+            value={pwForm.currentPassword}
+            onChange={handlePwChange}
+          />
+        </div>
+
+        <div style={styles.formField}>
+          <label style={styles.label}>New Password</label>
+          <input
+            style={styles.input}
+            type="password"
+            name="newPassword"
+            placeholder="Enter new password"
+            value={pwForm.newPassword}
+            onChange={handlePwChange}
+          />
+        </div>
+
+        <div style={styles.formField}>
+          <label style={styles.label}>Confirm New Password</label>
+          <input
+            style={styles.input}
+            type="password"
+            name="confirmPassword"
+            placeholder="Re-enter new password"
+            value={pwForm.confirmPassword}
+            onChange={handlePwChange}
+          />
+        </div>
+
+        <button
+          style={{
+            ...styles.saveBtn,
+            opacity: pwSaving ? 0.7 : 1,
+          }}
+          onClick={handleChangePassword}
+          disabled={pwSaving}
+        >
+          {pwSaving ? '⏳ Changing...' : '🔑 Change Password'}
+        </button>
       </div>
 
       {/* ✅ Change 8 — Customer QR & WhatsApp Access section */}
