@@ -18,6 +18,9 @@ function App() {
   const [activeTab, setActiveTab] = useState('orders')
   const [verifying, setVerifying] = useState({})
   const [updatingOrderId, setUpdatingOrderId] = useState(null) // ✅ Step 1
+  // ✅ Reported up from TrialAnalytics via onPlanStatusChange — read-only signal,
+  // App does not query Supabase for this itself.
+  const [planStatus, setPlanStatus] = useState({ hasValidPaidPlan: false, isTrialActive: false })
 
   function handleLoginSuccess(ownerData) {
     console.log("✅ Login success — store_id:", ownerData.id)
@@ -351,7 +354,7 @@ function App() {
           { key: 'customers',       label: '👥 Customers'        },
           { key: 'offers',          label: '🎁 Offers'           },
           { key: 'sales',           label: '📊 Sales'            },
-          { key: 'trialanalytics',  label: '📈 Trial / Analytics' },
+          { key: 'trialanalytics',  label: planStatus.hasValidPaidPlan ? '📊 StyleFlow Insights' : '📈 Trial / Analytics' },
           { key: 'paymentsettings', label: '💳 Payment Settings' },
           { key: 'settings',        label: '⚙️ Settings'         },
         ].map((tab) => (
@@ -596,7 +599,7 @@ function App() {
 
       {/* ✅ Trial / Analytics Tab */}
       {activeTab === 'trialanalytics' && (
-        <TrialAnalytics owner={owner} />
+        <TrialAnalytics owner={owner} onPlanStatusChange={setPlanStatus} />
       )}
 
       {/* ✅ Payment Settings Tab */}
