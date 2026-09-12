@@ -146,6 +146,21 @@ function App() {
       const oldStatus = currentOrder.status
       console.log(`📦 Status change: ${oldStatus} → ${newStatus} for order ${orderId}`)
 
+      // ✅ Confirm the status change with the backend FIRST, before touching stock,
+      // so a failed backend call never leaves stock mutated with the order still
+      // showing the old status.
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId, newStatus })
+      })
+
+      if (!response.ok) {
+        console.error("❌ Failed to update status via backend")
+        setError(`Failed to update order #${orderId} to "${newStatus}". Please try again.`)
+        return
+      }
+
       const { data: orderItemsList, error: itemsError } = await supabase
         .from('order_items')
         .select('product_id, quantity')
@@ -153,6 +168,11 @@ function App() {
 
       if (itemsError) {
         console.error("❌ Failed to fetch order items:", itemsError.message)
+        setError(`Order #${orderId} status was updated, but stock could not be adjusted (failed to fetch order items). Please check stock manually.`)
+        // Status already succeeded on the backend, so reflect that locally.
+        setOrders(prevOrders => prevOrders.map(o =>
+          o.id === orderId ? { ...o, status: newStatus } : o
+        ))
         return
       }
 
@@ -200,17 +220,6 @@ function App() {
         console.log(`ℹ️ ${oldStatus} → ${newStatus}: no stock rule applied`)
       }
 
-      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL}/update-status`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, newStatus })
-      })
-
-      if (!response.ok) {
-        console.error("❌ Failed to update status via backend")
-        return
-      }
-
       // ✅ Update only the affected order locally instead of re-fetching everything
       setOrders(prevOrders => prevOrders.map(o =>
         o.id === orderId ? { ...o, status: newStatus } : o
@@ -218,12 +227,12 @@ function App() {
 
     } catch (err) {
       console.error("❌ updateStatus error:", err.message)
+      setError(`Something went wrong updating order #${orderId}: ${err.message}`)
     } finally {
       // ✅ Step 7 — always clear loading in finally
       setUpdatingOrderId(null)
     }
   }
-
   async function verifyPayment(orderId, action) {
     try {
       setVerifying(prev => ({ ...prev, [orderId]: true }))
