@@ -524,25 +524,29 @@ function TrialAnalytics({ owner, onPlanStatusChange }) {
         ))}
       </div>
 
-      <h3 style={styles.sectionTitle}>✅ Onboarding Checklist</h3>
-      <div style={styles.checklistBox}>
-        {checklistItems.map(item => (
-          <div key={item.key} style={styles.checklistRow}>
-            <span style={styles.checklistLabel}>
-              {checklist[item.key] ? '☑️' : '☐'} {item.label}
-            </span>
-            {item.manual && (
-              <button
-                style={styles.checklistToggleBtn}
-                disabled={savingChecklist}
-                onClick={() => toggleManualItem(item.key)}
-              >
-                {checklist[item.key] ? 'Mark Incomplete' : 'Mark Complete'}
-              </button>
-            )}
+      {!metrics.hasValidPaidPlan && (
+        <>
+          <h3 style={styles.sectionTitle}>✅ Onboarding Checklist</h3>
+          <div style={styles.checklistBox}>
+            {checklistItems.map(item => (
+              <div key={item.key} style={styles.checklistRow}>
+                <span style={styles.checklistLabel}>
+                  {checklist[item.key] ? '☑️' : '☐'} {item.label}
+                </span>
+                {item.manual && (
+                  <button
+                    style={styles.checklistToggleBtn}
+                    disabled={savingChecklist}
+                    onClick={() => toggleManualItem(item.key)}
+                  >
+                    {checklist[item.key] ? 'Mark Incomplete' : 'Mark Complete'}
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
     </div>
   )
 }
