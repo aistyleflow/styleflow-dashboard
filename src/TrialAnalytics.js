@@ -23,10 +23,10 @@ function TrialAnalytics({ owner }) {
       setLoading(true)
       setError(null)
 
-      // Trial dates come only from shop_owners — never invented here.
+      // Trial dates and plan/subscription fields come only from shop_owners — never invented here.
       const { data: ownerRow, error: ownerError } = await supabase
         .from('shop_owners')
-        .select('trial_start_date, trial_end_date, training_completed, customers_introduced')
+        .select('trial_start_date, trial_end_date, training_completed, customers_introduced, subscription_status, payment_status, plan_status')
         .eq('id', storeId)
         .maybeSingle()
 
@@ -38,6 +38,18 @@ function TrialAnalytics({ owner }) {
 
       const trialStart = ownerRow?.trial_start_date || null
       const trialEnd = ownerRow?.trial_end_date || null
+
+      // ✅ Plan/subscription state, read as-is from shop_owners — no invented fields.
+      const subscriptionStatus = ownerRow?.subscription_status || null
+      const paymentStatus = ownerRow?.payment_status || null
+      const planStatus = ownerRow?.plan_status || null
+
+      const isTrialActive = !!(trialEnd && new Date(trialEnd).getTime() >= new Date().setHours(0, 0, 0, 0))
+
+      const hasValidPaidPlan =
+        (subscriptionStatus === 'monthly' || subscriptionStatus === 'yearly') &&
+        paymentStatus === 'paid' &&
+        planStatus === 'standard'
 
       // All analytics queries are scoped by store_id and, where a trial
       // window exists, further scoped by the trial's own start/end dates.
@@ -93,6 +105,11 @@ function TrialAnalytics({ owner }) {
       setMetrics({
         trialStart,
         trialEnd,
+        subscriptionStatus,
+        paymentStatus,
+        planStatus,
+        isTrialActive,
+        hasValidPaidPlan,
         customersUsing,
         productViews,
         cartAdds,
@@ -182,6 +199,17 @@ function TrialAnalytics({ owner }) {
     )
   }
 
+  // ✅ Trial ended + no valid paid plan → existing continue-plan style message,
+  // reusing the same empty-state pattern already used above.
+  if (!metrics.isTrialActive && !metrics.hasValidPaidPlan) {
+    return (
+      <div style={styles.center}>
+        <p style={styles.emptyText}>⏳ Your trial has ended.</p>
+        <p style={styles.emptySubText}>Subscribe to a StyleFlow plan to continue using your dashboard.</p>
+      </div>
+    )
+  }
+
   const usageStats = [
     { label: '👥 Customers Using StyleFlow', value: metrics.customersUsing },
     { label: '👀 Products Viewed', value: metrics.productViews },
@@ -200,29 +228,38 @@ function TrialAnalytics({ owner }) {
 
   return (
     <div>
-      <div style={styles.trialCard}>
-        <h3 style={styles.sectionTitle}>📅 Your 14-Day Trial</h3>
-        <div style={styles.trialRow}>
-          <div style={styles.trialItem}>
-            <span style={styles.trialLabel}>Trial Start</span>
-            <span style={styles.trialValue}>{formatDate(metrics.trialStart)}</span>
-          </div>
-          <div style={styles.trialItem}>
-            <span style={styles.trialLabel}>Trial End</span>
-            <span style={styles.trialValue}>{formatDate(metrics.trialEnd)}</span>
-          </div>
-          <div style={styles.trialItem}>
-            <span style={styles.trialLabel}>Days Remaining</span>
-            <span style={{
-              ...styles.trialValue,
-              color: daysRemaining !== null && daysRemaining <= 3 ? '#e53935' : '#2e7d32',
-              fontWeight: 'bold'
-            }}>
-              {daysRemaining !== null ? `${daysRemaining} days` : '—'}
-            </span>
+      {metrics.isTrialActive ? (
+        <div style={styles.trialCard}>
+          <h3 style={styles.sectionTitle}>📅 Your 14-Day Trial</h3>
+          <div style={styles.trialRow}>
+            <div style={styles.trialItem}>
+              <span style={styles.trialLabel}>Trial Start</span>
+              <span style={styles.trialValue}>{formatDate(metrics.trialStart)}</span>
+            </div>
+            <div style={styles.trialItem}>
+              <span style={styles.trialLabel}>Trial End</span>
+              <span style={styles.trialValue}>{formatDate(metrics.trialEnd)}</span>
+            </div>
+            <div style={styles.trialItem}>
+              <span style={styles.trialLabel}>Days Remaining</span>
+              <span style={{
+                ...styles.trialValue,
+                color: daysRemaining !== null && daysRemaining <= 3 ? '#e53935' : '#2e7d32',
+                fontWeight: 'bold'
+              }}>
+                {daysRemaining !== null ? `${daysRemaining} days` : '—'}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div style={styles.trialCard}>
+          <h3 style={styles.sectionTitle}>🌟 StyleFlow Insights</h3>
+          <p style={styles.trialValue}>
+            {metrics.subscriptionStatus === 'yearly' ? 'Yearly' : 'Monthly'} plan active
+          </p>
+        </div>
+      )}
 
       <h3 style={styles.sectionTitle}>📊 Is StyleFlow Being Used?</h3>
       <div style={styles.statsGrid}>
