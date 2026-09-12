@@ -55,7 +55,9 @@ function TrialAnalytics({ owner, onPlanStatusChange }) {
 
       // ✅ Report plan status up to App so the dashboard tab label can react.
       // Read-only signal — App owns no analytics logic itself.
-      if (onPlanStatusChange) onPlanStatusChange({ hasValidPaidPlan, isTrialActive })
+      // knownYet: true marks that this is a real, resolved status — App uses
+      // this to avoid showing "Trial / Analytics" before status is known.
+      if (onPlanStatusChange) onPlanStatusChange({ hasValidPaidPlan, isTrialActive, knownYet: true })
 
       // Trial metrics stay scoped to the trial's own start/end dates, exactly as before.
       const windowStart = trialStart

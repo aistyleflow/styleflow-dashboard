@@ -20,7 +20,9 @@ function App() {
   const [updatingOrderId, setUpdatingOrderId] = useState(null) // ✅ Step 1
   // ✅ Reported up from TrialAnalytics via onPlanStatusChange — read-only signal,
   // App does not query Supabase for this itself.
-  const [planStatus, setPlanStatus] = useState({ hasValidPaidPlan: false, isTrialActive: false })
+  // knownYet stays false until the first real status arrives, so the tab
+  // label never assumes Trial before plan status is actually known.
+  const [planStatus, setPlanStatus] = useState({ hasValidPaidPlan: false, isTrialActive: false, knownYet: false })
 
   function handleLoginSuccess(ownerData) {
     console.log("✅ Login success — store_id:", ownerData.id)
@@ -354,7 +356,7 @@ function App() {
           { key: 'customers',       label: '👥 Customers'        },
           { key: 'offers',          label: '🎁 Offers'           },
           { key: 'sales',           label: '📊 Sales'            },
-          { key: 'trialanalytics',  label: planStatus.hasValidPaidPlan ? '📊 StyleFlow Insights' : '📈 Trial / Analytics' },
+          { key: 'trialanalytics',  label: !planStatus.knownYet ? '⏳ Loading...' : (planStatus.hasValidPaidPlan ? '📊 StyleFlow Insights' : '📈 Trial / Analytics') },
           { key: 'paymentsettings', label: '💳 Payment Settings' },
           { key: 'settings',        label: '⚙️ Settings'         },
         ].map((tab) => (
