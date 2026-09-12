@@ -190,24 +190,29 @@ function TrialAnalytics({ owner }) {
     )
   }
 
-  if (!metrics?.trialStart || !metrics?.trialEnd) {
-    return (
-      <div style={styles.center}>
-        <p style={styles.emptyText}>📅 Trial dates haven't been set up for this store yet.</p>
-        <p style={styles.emptySubText}>Contact StyleFlow support to get your trial started.</p>
-      </div>
-    )
-  }
+  // ✅ Paid plan takes priority over everything else — checked before any
+  // trial-date requirement, so a paid subscriber sees Insights even if
+  // trial dates are missing or expired.
+  if (!metrics.hasValidPaidPlan) {
+    if (!metrics?.trialStart || !metrics?.trialEnd) {
+      return (
+        <div style={styles.center}>
+          <p style={styles.emptyText}>📅 Trial dates haven't been set up for this store yet.</p>
+          <p style={styles.emptySubText}>Contact StyleFlow support to get your trial started.</p>
+        </div>
+      )
+    }
 
-  // ✅ Trial ended + no valid paid plan → existing continue-plan style message,
-  // reusing the same empty-state pattern already used above.
-  if (!metrics.isTrialActive && !metrics.hasValidPaidPlan) {
-    return (
-      <div style={styles.center}>
-        <p style={styles.emptyText}>⏳ Your trial has ended.</p>
-        <p style={styles.emptySubText}>Subscribe to a StyleFlow plan to continue using your dashboard.</p>
-      </div>
-    )
+    // ✅ Trial ended + no valid paid plan → existing continue-plan style message,
+    // reusing the same empty-state pattern already used above.
+    if (!metrics.isTrialActive) {
+      return (
+        <div style={styles.center}>
+          <p style={styles.emptyText}>⏳ Your trial has ended.</p>
+          <p style={styles.emptySubText}>Subscribe to a StyleFlow plan to continue using your dashboard.</p>
+        </div>
+      )
+    }
   }
 
   const usageStats = [
@@ -228,7 +233,14 @@ function TrialAnalytics({ owner }) {
 
   return (
     <div>
-      {metrics.isTrialActive ? (
+      {metrics.hasValidPaidPlan ? (
+        <div style={styles.trialCard}>
+          <h3 style={styles.sectionTitle}>🌟 StyleFlow Insights</h3>
+          <p style={styles.trialValue}>
+            {metrics.subscriptionStatus === 'yearly' ? 'Yearly' : 'Monthly'} plan active
+          </p>
+        </div>
+      ) : metrics.isTrialActive ? (
         <div style={styles.trialCard}>
           <h3 style={styles.sectionTitle}>📅 Your 14-Day Trial</h3>
           <div style={styles.trialRow}>
@@ -252,14 +264,7 @@ function TrialAnalytics({ owner }) {
             </div>
           </div>
         </div>
-      ) : (
-        <div style={styles.trialCard}>
-          <h3 style={styles.sectionTitle}>🌟 StyleFlow Insights</h3>
-          <p style={styles.trialValue}>
-            {metrics.subscriptionStatus === 'yearly' ? 'Yearly' : 'Monthly'} plan active
-          </p>
-        </div>
-      )}
+      ) : null}
 
       <h3 style={styles.sectionTitle}>📊 Is StyleFlow Being Used?</h3>
       <div style={styles.statsGrid}>
